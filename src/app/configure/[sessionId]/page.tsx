@@ -1,0 +1,144 @@
+"use client";
+
+import { ColorPicker } from "@/components/configure/ColorPicker";
+import { MockupPreview } from "@/components/configure/MockupPreview";
+import { TextEditor } from "@/components/configure/TextEditor";
+import { Header } from "@/components/layout/Header";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { supabase } from "@/lib/supabase";
+import type { OnboardingData, SloganOption } from "@/lib/types";
+import { ShoppingCart } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { use, useEffect, useState } from "react";
+
+const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL"];
+
+export default function ConfigurePage({ params }: { params: Promise<{ sessionId: string }> }) {
+  const { sessionId } = use(params);
+  const router = useRouter();
+
+  const [designUrl, setDesignUrl] = useState<string | null>(null);
+  const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(null);
+  const [color, setColor] = useState("black");
+  const [printArea, setPrintArea] = useState<"front" | "back" | "both">("front");
+  const [customText, setCustomText] = useState("");
+  const [sizes, setSizes] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    void supabase
+      .from("sessions")
+      .select("selected_design_url, selected_slogan, onboarding_data")
+      .eq("id", sessionId)
+      .single()
+      .then(({ data }) => {
+        if (!data) return;
+        setDesignUrl(data.selected_design_url);
+        const selectedSlogan = data.selected_slogan as SloganOption | null;
+        setOnboardingData(data.onboarding_data as OnboardingData | null);
+        if (selectedSlogan?.main_text) setCustomText(selectedSlogan.main_text);
+      });
+  }, [sessionId]);
+
+  const names = Array.isArray(onboardingData?.names) ? onboardingData.names : [];
+  const quantity = onboardingData?.group_size ?? 1;
+
+  const unitPrice = 25;
+  const discount = quantity >= 20 ? 0.3 : quantity >= 10 ? 0.2 : quantity >= 5 ? 0.1 : 0;
+  const total = (unitPrice * quantity * (1 - discount)).toFixed(2);
+
+  const handleCheckout = async () => {
+    await supabase
+      .from("sessions")
+      .update({
+        config: {
+          product_color: color,
+          print_area: printArea,
+          text_override: customText,
+          sizes,
+          quantity,
+        },
+        status: "checkout",
+      })
+      .eq("id", sessionId);
+
+    router.push(`/checkout/${sessionId}`);
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Header />
+      <main className="mx-auto w-full max-w-xl space-y-6 p-4">
+        <h2 className="text-xl font-bold text-white">Dein Design konfigurieren</h2>
+
+        <MockupPreview designUrl={designUrl} productColor={color} printArea={printArea} />
+
+        <ColorPicker selected={color} onChange={setColor} />
+
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-zinc-400">Druckbereich</p>
+          <div className="flex gap-2">
+            {(["front", "back", "both"] as const).map((area) => (
+              <Button
+                key={area}
+                variant={printArea === area ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPrintArea(area)}
+                className={printArea === area ? "bg-violet-600" : "border-zinc-700 text-zinc-300"}
+              >
+                {area === "front" ? "Vorne" : area === "back" ? "Hinten" : "Vorne + Hinten"}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <TextEditor value={customText} onChange={setCustomText} label="Text auf dem Design" />
+
+        {names.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-zinc-400">Groessen ({names.length} Personen)</p>
+            <div className="space-y-2">
+              {names.map((name) => (
+                <div key={name} className="flex items-center justify-between">
+                  <span className="text-sm text-zinc-300">{name}</span>
+                  <div className="flex gap-1">
+                    {SIZE_OPTIONS.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setSizes((prev) => ({ ...prev, [name]: s }))}
+                        className={`rounded px-2 py-1 text-xs transition-colors ${
+                          sizes[name] === s
+                            ? "bg-violet-600 text-white"
+                            : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <Separator className="border-zinc-800" />
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-zinc-400">
+              {quantity} x {unitPrice} EUR
+              {discount > 0 && (
+                <span className="ml-1 text-green-400">({discount * 100}% Rabatt)</span>
+              )}
+            </p>
+            <p className="text-xl font-bold text-white">{total} EUR</p>
+          </div>
+          <Button onClick={() => void handleCheckout()} className="bg-violet-600 px-6 hover:bg-violet-700">
+            <ShoppingCart className="mr-2 h-4 w-4" /> In den Warenkorb
+          </Button>
+        </div>
+      </main>
+    </div>
+  );
+}

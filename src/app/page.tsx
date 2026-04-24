@@ -1,65 +1,128 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { NotesFeed } from "@/components/notes/NotesFeed";
+
+const EXAMPLES = [
+  "Shirt fuer unseren Fussballverein, 18 Spieler",
+  "JGA fuer Lisa, 8 Maedels, Mallorca",
+  "Geburtstagsshirt fuer meinen Kumpel Tim, 30 Jahre",
+  "Abi 2026, Klasse 10b, ca. 25 Leute",
+];
+
+export default function LandingPage() {
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+
+  const handleStart = async () => {
+    const trimmed = input.trim();
+    if (!trimmed || loading) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initial_message: trimmed }),
+      });
+
+      const data = (await res.json()) as { sessionId?: string; error?: string };
+
+      if (!res.ok) {
+        setError(
+          typeof data.error === "string"
+            ? data.error
+            : `Session konnte nicht erstellt werden (${res.status}).`
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (!data.sessionId) {
+        setError("Unerwartete Antwort von der Session-API.");
+        setLoading(false);
+        return;
+      }
+
+      sessionStorage.setItem(`printai_initial_${data.sessionId}`, trimmed);
+      router.push(`/chat?s=${data.sessionId}`);
+    } catch {
+      setError("Netzwerkfehler – bitte pruefen ob der Dev-Server laeuft.");
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="flex min-h-screen flex-col items-center justify-center px-4">
+      <div className="w-full max-w-lg space-y-8">
+        <div className="text-center">
+          <h1 className="text-5xl font-black tracking-tight text-white">
+            Print<span className="text-violet-400">AI</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+          <p className="mt-3 text-lg text-zinc-400">Dein Design. In Minuten.</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        <div className="space-y-3">
+          {error && (
+            <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {error}
+            </p>
+          )}
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void handleStart();
+              }
+            }}
+            placeholder="Was moechtest du gestalten?"
+            rows={3}
+            className="resize-none rounded-2xl border-zinc-700 bg-zinc-900 text-base text-zinc-100 placeholder-zinc-500 focus:border-violet-500"
+          />
+          <Button
+            onClick={() => void handleStart()}
+            disabled={!input.trim() || loading}
+            className="w-full rounded-2xl bg-violet-600 py-6 text-base font-semibold hover:bg-violet-700 disabled:opacity-40"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 animate-spin" />
+                Starte...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                Jetzt gestalten <ArrowRight className="h-4 w-4" />
+              </span>
+            )}
+          </Button>
         </div>
-      </main>
-    </div>
+
+        <div className="space-y-2">
+          <p className="text-center text-xs text-zinc-600">Oder probier ein Beispiel:</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {EXAMPLES.map((ex) => (
+              <button
+                key={ex}
+                onClick={() => setInput(ex)}
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
+              >
+                {ex}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <NotesFeed />
+      </div>
+    </main>
   );
 }
