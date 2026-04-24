@@ -35,9 +35,9 @@ async function uploadNoteScreenshot(pagePath: string, dataUrl: string) {
 export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("feedback_notes")
-    .select("id, created_at, page_path, note, screenshot_url")
+    .select("id, created_at, page_path, note, screenshot_url, resolved, resolved_at")
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(200);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -72,8 +72,10 @@ export async function POST(request: Request) {
         page_path: pagePath,
         note,
         screenshot_url: screenshotUrl,
+        resolved: false,
+        resolved_at: null,
       })
-      .select("id, created_at, page_path, note, screenshot_url")
+      .select("id, created_at, page_path, note, screenshot_url, resolved, resolved_at")
       .single();
 
     if (error) {
@@ -85,4 +87,49 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = (await request.json()) as { id?: string; resolved?: boolean };
+    const id = (body.id ?? "").trim();
+    if (!id) {
+      return NextResponse.json({ error: "id required" }, { status: 400 });
+    }
+    if (typeof body.resolved !== "boolean") {
+      return NextResponse.json({ error: "resolved boolean required" }, { status: 400 });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("feedback_notes")
+      .update({
+        resolved: body.resolved,
+        resolved_at: body.resolved ? new Date().toISOString() : null,
+      })
+      .eq("id", id)
+      .select("id, created_at, page_path, note, screenshot_url, resolved, resolved_at")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ note: data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const url = new URL(request.url);
+  const id = (url.searchParams.get("id") ?? "").trim();
+  if (!id) {
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
+
+  const { error } = await supabaseAdmin.from("feedback_notes").delete().eq("id", id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
 }

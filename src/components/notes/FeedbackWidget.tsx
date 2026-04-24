@@ -22,14 +22,38 @@ export function FeedbackWidget() {
   async function captureScreenshot() {
     setError(null);
     try {
-      const canvas = await html2canvas(document.body, {
+      const canvas = await html2canvas(document.documentElement, {
         backgroundColor: "#09090b",
         useCORS: true,
+        allowTaint: true,
         scale: 1,
+        windowWidth: document.documentElement.scrollWidth,
+        windowHeight: document.documentElement.scrollHeight,
       });
       setScreenshot(canvas.toDataURL("image/png", 0.9));
     } catch {
-      setError("Screenshot konnte nicht erstellt werden.");
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false,
+        });
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.muted = true;
+        await video.play();
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || window.innerWidth;
+        canvas.height = video.videoHeight || window.innerHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas context not available");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        stream.getTracks().forEach((t) => t.stop());
+        setScreenshot(canvas.toDataURL("image/png", 0.9));
+      } catch {
+        setError(
+          "Screenshot konnte nicht erstellt werden. Bitte Browser-Freigabe erlauben oder manuell Screenshot machen."
+        );
+      }
     }
   }
 
