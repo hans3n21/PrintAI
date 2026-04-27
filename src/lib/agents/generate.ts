@@ -1,6 +1,9 @@
 import { getDesignVariantCount } from "@/lib/designVariantCount";
-import { generateDesignImage } from "@/lib/gemini";
+import { createDesignAsset } from "@/lib/assets/designAssets";
+import { markPostProcessingPending } from "@/lib/assets/postProcessing";
+import { getImageProvider } from "@/lib/imageProviders";
 import { supabaseAdmin } from "@/lib/supabase";
+import type { DesignAsset, ReferenceImageAsset } from "@/lib/types";
 
 const staggerMs = () => {
   const raw = process.env.GEMINI_IMAGE_STAGGER_MS;
@@ -16,20 +19,24 @@ function sleep(ms: number) {
 
 export async function generateDesigns(
   sessionId: string,
-  prompt: string
-): Promise<string[]> {
+  prompt: string,
+  referenceImages: ReferenceImageAsset[] = []
+): Promise<{ urls: string[]; assets: DesignAsset[] }> {
   const count = getDesignVariantCount();
   // Seriell: parallele Aufrufe triggern oft 429 (RPM/RPD).
-  const base64Images: string[] = [];
+  const provider = getImageProvider();
+  const generatedImages: Array<{ base64: string; provider: typeof provider.name; seed: string | null }> = [];
   const pause = staggerMs();
   for (let i = 0; i < count; i++) {
-    base64Images.push(await generateDesignImage(prompt, i));
+    generatedImages.push(
+      await provider.generateDesign({ prompt, variantIndex: i, referenceImages })
+    );
     if (i < count - 1 && pause > 0) await sleep(pause);
   }
 
-  const urls = await Promise.all(
-    base64Images.map(async (b64, i) => {
-      const buffer = Buffer.from(b64, "base64");
+  const assets = await Promise.all(
+    generatedImages.map(async (generated, i) => {
+      const buffer = Buffer.from(generated.base64, "base64");
       const filename = `${sessionId}/design_${i + 1}_${Date.now()}.png`;
 
       const { error } = await supabaseAdmin.storage
@@ -39,9 +46,17 @@ export async function generateDesigns(
       if (error) throw new Error(`Storage upload failed: ${error.message}`);
 
       const { data } = supabaseAdmin.storage.from("designs").getPublicUrl(filename);
-      return data.publicUrl;
+      return markPostProcessingPending(
+        createDesignAsset({
+          previewUrl: data.publicUrl,
+          provider: generated.provider,
+          prompt,
+          variantIndex: i,
+          seed: generated.seed,
+        })
+      );
     })
   );
 
-  return urls;
+  return { assets, urls: assets.map((asset) => asset.preview_url) };
 }

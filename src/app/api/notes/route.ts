@@ -1,4 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { ADMIN_COOKIE_NAME, isAdminCookieValid } from "@/lib/adminAuth";
+import { normalizeFeedbackCategory } from "@/lib/feedback/categories";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 function parseDataUrl(dataUrl: string): { mime: string; buffer: Buffer } | null {
@@ -32,10 +35,23 @@ async function uploadNoteScreenshot(pagePath: string, dataUrl: string) {
   return data.publicUrl;
 }
 
+async function requireAdmin() {
+  const cookieStore = await cookies();
+  if (isAdminCookieValid(cookieStore.get(ADMIN_COOKIE_NAME)?.value)) {
+    return null;
+  }
+  return NextResponse.json({ error: "Admin login required" }, { status: 401 });
+}
+
 export async function GET() {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   const { data, error } = await supabaseAdmin
     .from("feedback_notes")
-    .select("id, created_at, page_path, note, screenshot_url, resolved, resolved_at")
+    .select(
+      "id, created_at, page_path, note, category, screenshot_url, resolved, resolved_at, session_id, target_type, target_ref, assistant_output, conversation_snapshot, design_urls_snapshot, client_state"
+    )
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -49,8 +65,16 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
       note?: string;
+      category?: string;
       page_path?: string;
       screenshot_base64?: string;
+      session_id?: string;
+      target_type?: string;
+      target_ref?: string;
+      assistant_output?: string;
+      conversation_snapshot?: unknown;
+      design_urls_snapshot?: unknown;
+      client_state?: unknown;
     };
     const note = (body.note ?? "").trim();
     const pagePath = (body.page_path ?? "").trim();
@@ -71,11 +95,21 @@ export async function POST(request: Request) {
       .insert({
         page_path: pagePath,
         note,
+        category: normalizeFeedbackCategory(body.category),
         screenshot_url: screenshotUrl,
+        session_id: body.session_id?.trim() || null,
+        target_type: body.target_type?.trim() || "page",
+        target_ref: body.target_ref?.trim() || null,
+        assistant_output: body.assistant_output?.trim() || null,
+        conversation_snapshot: body.conversation_snapshot ?? null,
+        design_urls_snapshot: body.design_urls_snapshot ?? null,
+        client_state: body.client_state ?? null,
         resolved: false,
         resolved_at: null,
       })
-      .select("id, created_at, page_path, note, screenshot_url, resolved, resolved_at")
+      .select(
+        "id, created_at, page_path, note, category, screenshot_url, resolved, resolved_at, session_id, target_type, target_ref, assistant_output, conversation_snapshot, design_urls_snapshot, client_state"
+      )
       .single();
 
     if (error) {
@@ -90,6 +124,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   try {
     const body = (await request.json()) as { id?: string; resolved?: boolean };
     const id = (body.id ?? "").trim();
@@ -107,7 +144,9 @@ export async function PATCH(request: Request) {
         resolved_at: body.resolved ? new Date().toISOString() : null,
       })
       .eq("id", id)
-      .select("id, created_at, page_path, note, screenshot_url, resolved, resolved_at")
+      .select(
+        "id, created_at, page_path, note, category, screenshot_url, resolved, resolved_at, session_id, target_type, target_ref, assistant_output, conversation_snapshot, design_urls_snapshot, client_state"
+      )
       .single();
 
     if (error) {
@@ -121,6 +160,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   const url = new URL(request.url);
   const id = (url.searchParams.get("id") ?? "").trim();
   if (!id) {

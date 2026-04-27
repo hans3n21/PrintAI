@@ -18,6 +18,21 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Future Image Editing Ideas
+
+- Add a mask-based image editor so users can select parts of an uploaded photo
+  and ask the AI to change only that area.
+- Support common edits like replacing shirt color, changing background, removing
+  objects, or adapting a face/reference photo while preserving the rest.
+- Evaluate OpenAI image edits or Google Imagen mask editing for this workflow.
+- Add a richer voice-message UI with recorded audio playback and a persistent
+  waveform preview, similar to WhatsApp voice notes.
+- Add a T-shirt mockup workspace as a preview step: render the selected product
+  color as the shirt foundation, place the transparent design on top, and let
+  users position, scale, and rotate the motif before continuing. Keep the image
+  generation prompt focused on an isolated printable motif, not a full shirt
+  mockup, so the mockup remains a UI preview and not the production print file.
+
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Learn More

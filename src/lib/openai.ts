@@ -2,6 +2,7 @@ import OpenAI from "openai";
 
 export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
+  dangerouslyAllowBrowser: process.env.NODE_ENV === "test",
 });
 
 /** Chat model for onboarding, prompt builder, slogans (override via OPENAI_MODEL). */

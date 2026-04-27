@@ -11,7 +11,7 @@ export async function POST(request: Request) {
 
   const { data: session } = await supabaseAdmin
     .from("sessions")
-    .select("config, selected_design_url, onboarding_data")
+    .select("config, selected_design_url, design_assets, product_selection, onboarding_data")
     .eq("id", sessionId)
     .single();
 

@@ -1,10 +1,18 @@
+import { buildCreativeBrief } from "@/lib/agents/creativeBrief";
 import { buildImagePrompt } from "@/lib/agents/promptBuilder";
 import {
   runForceCompleteOnboarding,
   runOnboardingMessage,
 } from "@/lib/agents/onboarding";
+import { mergeOnboardingWithProductSelection } from "@/lib/productSelection";
 import { supabaseAdmin } from "@/lib/supabase";
-import type { ChatApiResponse, ChatMessage, OnboardingData } from "@/lib/types";
+import type {
+  ChatApiResponse,
+  ChatMessage,
+  OnboardingData,
+  ProductSelection,
+  ReferenceImageAsset,
+} from "@/lib/types";
 import { NextResponse } from "next/server";
 
 function parseDataUrl(dataUrl: string): { mime: string; buffer: Buffer } | null {
@@ -19,8 +27,9 @@ function parseDataUrl(dataUrl: string): { mime: string; buffer: Buffer } | null 
 
 async function uploadReferenceImage(
   sessionId: string,
-  dataUrl: string
-): Promise<string> {
+  dataUrl: string,
+  description?: string | null
+): Promise<ReferenceImageAsset> {
   const parsed = parseDataUrl(dataUrl);
   if (!parsed) {
     throw new Error("Invalid image data (expected data URL base64)");
@@ -39,6 +48,28 @@ async function uploadReferenceImage(
     .upload(filename, parsed.buffer, { contentType: parsed.mime, upsert: true });
   if (error) throw new Error(`Upload failed: ${error.message}`);
   const { data } = supabaseAdmin.storage.from("designs").getPublicUrl(filename);
+  return {
+    url: data.publicUrl,
+    storage_path: filename,
+    mime: parsed.mime,
+    uploaded_at: new Date().toISOString(),
+    description: description?.trim() || "Vom Nutzer hochgeladenes Referenzbild",
+  };
+}
+
+async function exportCreativeBrief(
+  sessionId: string,
+  brief: unknown
+): Promise<string> {
+  const filename = `${sessionId}/creative_brief_${Date.now()}.json`;
+  const { error } = await supabaseAdmin.storage
+    .from("designs")
+    .upload(filename, Buffer.from(JSON.stringify(brief, null, 2), "utf-8"), {
+      contentType: "application/json",
+      upsert: true,
+    });
+  if (error) throw new Error(`Creative brief export failed: ${error.message}`);
+  const { data } = supabaseAdmin.storage.from("designs").getPublicUrl(filename);
   return data.publicUrl;
 }
 
@@ -55,19 +86,33 @@ async function finalizeOnboarding(
   history: ChatMessage[],
   userContent: string,
   summary: string,
-  data: OnboardingData
+  data: OnboardingData,
+  productSelection: ProductSelection | null | undefined,
+  referenceImages: ReferenceImageAsset[]
 ) {
-  const promptData = await buildImagePrompt(data);
+  const mergedData = mergeOnboardingWithProductSelection(data, productSelection);
+  const completeHistory: ChatMessage[] = [
+    ...history,
+    { role: "user", content: userContent },
+    { role: "assistant", content: summary },
+  ];
+  const creativeBrief = await buildCreativeBrief(
+    completeHistory,
+    mergedData,
+    productSelection,
+    referenceImages
+  );
+  const creativeBriefUrl = await exportCreativeBrief(sessionId, creativeBrief);
+  const promptData = await buildImagePrompt(mergedData, productSelection);
 
   await supabaseAdmin
     .from("sessions")
     .update({
-      conversation_history: [
-        ...history,
-        { role: "user", content: userContent },
-        { role: "assistant", content: summary },
-      ],
-      onboarding_data: data,
+      conversation_history: completeHistory,
+      onboarding_data: mergedData,
+      creative_brief: creativeBrief,
+      creative_brief_url: creativeBriefUrl,
+      reference_images: referenceImages,
       prompt_data: promptData,
       status: "generating",
       updated_at: new Date().toISOString(),
@@ -98,7 +143,7 @@ export async function POST(request: Request) {
 
     const { data: session, error: loadError } = await supabaseAdmin
       .from("sessions")
-      .select("conversation_history, status")
+      .select("conversation_history, status, product_selection, reference_images")
       .eq("id", sessionId)
       .single();
 
@@ -107,6 +152,9 @@ export async function POST(request: Request) {
     }
 
     const history = (session.conversation_history ?? []) as ChatMessage[];
+    const productSelection = session.product_selection as ProductSelection | null;
+    const existingReferenceImages = (session.reference_images ??
+      []) as ReferenceImageAsset[];
 
     if (forceComplete) {
       const result = await runForceCompleteOnboarding(history);
@@ -122,18 +170,29 @@ export async function POST(request: Request) {
         history,
         userContent,
         result.summary,
-        result.data
+        result.data,
+        productSelection,
+        existingReferenceImages
       );
     }
 
-    let referenceImageUrl: string | undefined;
+    let referenceImage: ReferenceImageAsset | undefined;
     if (imageBase64?.trim()) {
-      referenceImageUrl = await uploadReferenceImage(sessionId, imageBase64);
+      referenceImage = await uploadReferenceImage(
+        sessionId,
+        imageBase64,
+        message
+          ? `Nutzerreferenz zum Wunsch: ${message.trim()}`
+          : "Nutzerreferenz ohne begleitenden Text"
+      );
     }
+    const referenceImages = referenceImage
+      ? [...existingReferenceImages, referenceImage]
+      : existingReferenceImages;
 
     const userLine =
       message.trim() ||
-      (referenceImageUrl ? "(Nutzer hat ein Referenzbild gesendet.)" : "");
+      (referenceImage ? "(Nutzer hat ein Referenzbild gesendet.)" : "");
 
     if (!userLine) {
       return NextResponse.json(
@@ -143,10 +202,12 @@ export async function POST(request: Request) {
     }
 
     const result = await runOnboardingMessage(history, userLine, {
-      referenceImageUrl,
+      referenceImageUrl: referenceImage?.url,
+      productSelection,
+      referenceImages,
     });
 
-    const storedUserContent = userHistoryContent(message, referenceImageUrl);
+    const storedUserContent = userHistoryContent(message, referenceImage?.url);
 
     if (!result.complete) {
       const newHistory: ChatMessage[] = [
@@ -157,7 +218,11 @@ export async function POST(request: Request) {
 
       await supabaseAdmin
         .from("sessions")
-        .update({ conversation_history: newHistory, updated_at: new Date().toISOString() })
+        .update({
+          conversation_history: newHistory,
+          reference_images: referenceImages,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", sessionId);
 
       const response: ChatApiResponse = {
@@ -173,7 +238,9 @@ export async function POST(request: Request) {
       history,
       storedUserContent,
       result.summary,
-      result.data
+      result.data,
+      productSelection,
+      referenceImages
     );
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "Unknown server error";

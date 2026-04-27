@@ -2,27 +2,24 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { NotesFeed } from "@/components/notes/NotesFeed";
-
-const EXAMPLES = [
-  "Shirt fuer unseren Fussballverein, 18 Spieler",
-  "JGA fuer Lisa, 8 Maedels, Mallorca",
-  "Geburtstagsshirt fuer meinen Kumpel Tim, 30 Jahre",
-  "Abi 2026, Klasse 10b, ca. 25 Leute",
-];
+import { PromptComposer } from "@/components/chat/PromptComposer";
+import { FeedbackWidget } from "@/components/notes/FeedbackWidget";
+import type { ProductColor, ProductSelection } from "@/lib/types";
 
 export default function LandingPage() {
-  const [input, setInput] = useState("");
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [productSelection, setProductSelection] = useState<ProductSelection>({
+    product: "tshirt",
+    product_color: "black",
+    quantity: 1,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const handleStart = async () => {
-    const trimmed = input.trim();
-    if (!trimmed || loading) return;
+  const handleStart = async (message: string) => {
+    const trimmed = message.trim();
+    if ((!trimmed && !pendingImage) || loading) return;
     setLoading(true);
     setError(null);
 
@@ -30,7 +27,10 @@ export default function LandingPage() {
       const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ initial_message: trimmed }),
+        body: JSON.stringify({
+          initial_message: trimmed || "Bitte nutze mein Foto als Referenz für das Design.",
+          product_selection: productSelection,
+        }),
       });
 
       const data = (await res.json()) as { sessionId?: string; error?: string };
@@ -51,10 +51,16 @@ export default function LandingPage() {
         return;
       }
 
-      sessionStorage.setItem(`printai_initial_${data.sessionId}`, trimmed);
+      sessionStorage.setItem(
+        `printai_initial_${data.sessionId}`,
+        trimmed || "Bitte nutze mein Foto als Referenz für das Design."
+      );
+      if (pendingImage) {
+        sessionStorage.setItem(`printai_initial_image_${data.sessionId}`, pendingImage);
+      }
       router.push(`/chat?s=${data.sessionId}`);
     } catch {
-      setError("Netzwerkfehler – bitte pruefen ob der Dev-Server laeuft.");
+      setError("Netzwerkfehler – bitte prüfen, ob der Dev-Server läuft.");
       setLoading(false);
     }
   };
@@ -75,54 +81,22 @@ export default function LandingPage() {
               {error}
             </p>
           )}
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void handleStart();
-              }
-            }}
-            placeholder="Was moechtest du gestalten?"
-            rows={3}
-            className="resize-none rounded-2xl border-zinc-700 bg-zinc-900 text-base text-zinc-100 placeholder-zinc-500 focus:border-violet-500"
+          <PromptComposer
+            placeholder="Was möchtest du gestalten?"
+            onSend={(message) => void handleStart(message)}
+            disabled={loading}
+            loading={loading}
+            variant="landing"
+            selectedColor={productSelection.product_color}
+            onColorChange={(color: ProductColor) =>
+              setProductSelection((prev) => ({ ...prev, product_color: color }))
+            }
+            attachmentPreview={pendingImage}
+            onAttachmentChange={setPendingImage}
           />
-          <Button
-            onClick={() => void handleStart()}
-            disabled={!input.trim() || loading}
-            className="w-full rounded-2xl bg-violet-600 py-6 text-base font-semibold hover:bg-violet-700 disabled:opacity-40"
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 animate-spin" />
-                Starte...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                Jetzt gestalten <ArrowRight className="h-4 w-4" />
-              </span>
-            )}
-          </Button>
         </div>
-
-        <div className="space-y-2">
-          <p className="text-center text-xs text-zinc-600">Oder probier ein Beispiel:</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            {EXAMPLES.map((ex) => (
-              <button
-                key={ex}
-                onClick={() => setInput(ex)}
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
-              >
-                {ex}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <NotesFeed />
       </div>
+      <FeedbackWidget />
     </main>
   );
 }

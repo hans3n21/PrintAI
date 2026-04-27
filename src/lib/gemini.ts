@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { openai } from "@/lib/openai";
+import type { ReferenceImageAsset } from "@/lib/types";
+import { toFile } from "openai/uploads";
 
 export const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 
@@ -58,6 +60,14 @@ function getImageProvider(): "openai" | "gemini" {
   return process.env.OPENAI_API_KEY?.trim() ? "openai" : "gemini";
 }
 
+function supportsOpenAITransparentBackground(modelName: string): boolean {
+  return (
+    modelName === "gpt-image-1" ||
+    modelName === "gpt-image-1.5" ||
+    modelName === "chatgpt-image-latest"
+  );
+}
+
 async function generateDesignImageWithOpenAI(
   prompt: string,
   variantIndex: number
@@ -70,28 +80,95 @@ async function generateDesignImageWithOpenAI(
   const modelName = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1";
   const fullPrompt = prompt + STYLE_VARIANTS[variantIndex];
   const size = process.env.OPENAI_IMAGE_SIZE?.trim() || "1024x1024";
+  const transparentBackgroundRequested =
+    supportsOpenAITransparentBackground(modelName);
 
   const response = await openai.images.generate({
     model: modelName,
     prompt: fullPrompt,
     size: size as "1024x1024" | "1536x1024" | "1024x1536" | "auto",
+    ...(transparentBackgroundRequested
+      ? { background: "transparent" as const }
+      : {}),
   });
 
   const b64 = response.data?.[0]?.b64_json;
   if (!b64) {
     throw new Error(
-      `OpenAI lieferte kein Bild (Modell ${modelName}). Bitte OPENAI_IMAGE_MODEL pruefen.`
+      `OpenAI lieferte kein Bild (Modell ${modelName}). Bitte OPENAI_IMAGE_MODEL prüfen.`
     );
   }
   return b64;
 }
 
+async function fetchReferenceImageFile(image: ReferenceImageAsset) {
+  const response = await fetch(image.url);
+  if (!response.ok) {
+    throw new Error(`Referenzbild konnte nicht geladen werden: ${image.url}`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const filename = image.storage_path.split("/").pop() || "reference.png";
+  return toFile(buffer, filename, { type: image.mime });
+}
+
+async function generateDesignImageWithOpenAIReferences(
+  prompt: string,
+  variantIndex: number,
+  referenceImages: ReferenceImageAsset[]
+): Promise<string> {
+  const key = process.env.OPENAI_API_KEY?.trim();
+  if (!key) {
+    throw new Error("OPENAI_API_KEY ist nicht gesetzt");
+  }
+
+  const modelName = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1";
+  const fullPrompt =
+    prompt +
+    STYLE_VARIANTS[variantIndex] +
+    "\nUse the attached reference image(s) as visual guidance while creating a clean printable design.";
+  const size = process.env.OPENAI_IMAGE_SIZE?.trim() || "1024x1024";
+  const images = await Promise.all(referenceImages.map(fetchReferenceImageFile));
+  const response = await openai.images.edit({
+    model: modelName,
+    image: images,
+    prompt: fullPrompt,
+    size: size as "256x256" | "512x512" | "1024x1024" | "1536x1024" | "1024x1536" | "auto",
+    output_format: "png",
+  });
+
+  const b64 = response.data?.[0]?.b64_json;
+  if (!b64) {
+    throw new Error(
+      `OpenAI lieferte kein bearbeitetes Bild (Modell ${modelName}). Bitte OPENAI_IMAGE_MODEL prüfen.`
+    );
+  }
+  return b64;
+}
+
+async function fetchReferenceImagePart(image: ReferenceImageAsset) {
+  const response = await fetch(image.url);
+  if (!response.ok) {
+    throw new Error(`Referenzbild konnte nicht geladen werden: ${image.url}`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return {
+    inlineData: {
+      mimeType: image.mime,
+      data: buffer.toString("base64"),
+    },
+  };
+}
+
 export async function generateDesignImage(
   prompt: string,
-  variantIndex: number
+  variantIndex: number,
+  referenceImages: ReferenceImageAsset[] = []
 ): Promise<string> {
-  if (getImageProvider() === "openai") {
-    return generateDesignImageWithOpenAI(prompt, variantIndex);
+  const provider = getImageProvider();
+  if (provider === "openai") {
+    return referenceImages.length > 0
+      ? generateDesignImageWithOpenAIReferences(prompt, variantIndex, referenceImages)
+      : generateDesignImageWithOpenAI(prompt, variantIndex);
   }
 
   const key = process.env.GEMINI_API_KEY?.trim();
@@ -101,7 +178,11 @@ export async function generateDesignImage(
 
   const modelName =
     process.env.GEMINI_IMAGE_MODEL?.trim() || "gemini-2.5-flash-image";
-  const fullPrompt = prompt + STYLE_VARIANTS[variantIndex];
+  const referenceInstruction =
+    referenceImages.length > 0
+      ? "\nUse the attached reference image(s) as guidance for likeness, pose, objects, colors, or mood, but convert the result into a clean isolated print design."
+      : "";
+  const fullPrompt = prompt + STYLE_VARIANTS[variantIndex] + referenceInstruction;
 
   const model = genAI.getGenerativeModel({
     model: modelName,
@@ -115,7 +196,14 @@ export async function generateDesignImage(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await model.generateContent(fullPrompt);
+      const content =
+        referenceImages.length > 0
+          ? [
+              { text: fullPrompt },
+              ...(await Promise.all(referenceImages.map(fetchReferenceImagePart))),
+            ]
+          : fullPrompt;
+      const response = await model.generateContent(content);
       const result = response.response;
       const candidate = result.candidates?.[0];
       if (!candidate) {

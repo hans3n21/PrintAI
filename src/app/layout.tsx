@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { FeedbackWidget } from "@/components/notes/FeedbackWidget";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,7 +19,6 @@ export default function RootLayout({
     <html lang="de" className="dark">
       <body className={`${inter.className} min-h-screen bg-zinc-950 text-zinc-100`}>
         {children}
-        <FeedbackWidget />
       </body>
     </html>
   );

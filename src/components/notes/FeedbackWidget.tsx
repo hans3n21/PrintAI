@@ -1,23 +1,44 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import html2canvas from "html2canvas";
 import { NotebookPen, Camera, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { FEEDBACK_CATEGORIES, type FeedbackCategory } from "@/lib/feedback/categories";
+import type { ChatMessage } from "@/lib/types";
 
-export function FeedbackWidget() {
+type FeedbackWidgetProps = {
+  sessionId?: string;
+  targetType?: "page" | "chat_message" | "chat_session" | "design" | "generation";
+  targetRef?: string;
+  assistantOutput?: string;
+  conversationSnapshot?: ChatMessage[];
+  designUrlsSnapshot?: string[];
+  clientState?: Record<string, unknown>;
+};
+
+export function FeedbackWidget({
+  sessionId,
+  targetType = "page",
+  targetRef,
+  assistantOutput,
+  conversationSnapshot,
+  designUrlsSnapshot,
+  clientState,
+}: FeedbackWidgetProps = {}) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [category, setCategory] = useState<FeedbackCategory>("general");
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
-  const pagePath = useMemo(() => {
-    if (typeof window === "undefined") return "/";
-    return `${window.location.pathname}${window.location.search || ""}`;
-  }, [open]);
+  const pagePath =
+    typeof window === "undefined"
+      ? "/"
+      : `${window.location.pathname}${window.location.search || ""}`;
 
   async function captureScreenshot() {
     setError(null);
@@ -25,35 +46,18 @@ export function FeedbackWidget() {
       const canvas = await html2canvas(document.documentElement, {
         backgroundColor: "#09090b",
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         scale: 1,
         windowWidth: document.documentElement.scrollWidth,
         windowHeight: document.documentElement.scrollHeight,
+        ignoreElements: (element) =>
+          element.hasAttribute("data-feedback-screenshot-ignore"),
       });
       setScreenshot(canvas.toDataURL("image/png", 0.9));
     } catch {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: false,
-        });
-        const video = document.createElement("video");
-        video.srcObject = stream;
-        video.muted = true;
-        await video.play();
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth || window.innerWidth;
-        canvas.height = video.videoHeight || window.innerHeight;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("Canvas context not available");
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        stream.getTracks().forEach((t) => t.stop());
-        setScreenshot(canvas.toDataURL("image/png", 0.9));
-      } catch {
-        setError(
-          "Screenshot konnte nicht erstellt werden. Bitte Browser-Freigabe erlauben oder manuell Screenshot machen."
-        );
-      }
+      setError(
+        "Screenshot konnte nicht erstellt werden. Die Notiz wird trotzdem mit Seiten- und Chat-Kontext gespeichert."
+      );
     }
   }
 
@@ -68,8 +72,16 @@ export function FeedbackWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           note: note.trim(),
+          category,
           page_path: pagePath,
           screenshot_base64: screenshot,
+          session_id: sessionId,
+          target_type: targetType,
+          target_ref: targetRef,
+          assistant_output: assistantOutput,
+          conversation_snapshot: conversationSnapshot,
+          design_urls_snapshot: designUrlsSnapshot,
+          client_state: clientState,
         }),
       });
       const data = (await res.json()) as { error?: string };
@@ -77,6 +89,7 @@ export function FeedbackWidget() {
         throw new Error(data.error || `Fehler ${res.status}`);
       }
       setNote("");
+      setCategory("general");
       setScreenshot(null);
       setOk("Notiz gespeichert.");
     } catch (e) {
@@ -90,6 +103,7 @@ export function FeedbackWidget() {
     <>
       <button
         aria-label="Notiz erfassen"
+        data-feedback-screenshot-ignore
         onClick={() => setOpen(true)}
         className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-100 shadow-lg transition hover:border-violet-500 hover:bg-zinc-800"
       >
@@ -98,7 +112,10 @@ export function FeedbackWidget() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 md:items-center">
+        <div
+          data-feedback-screenshot-ignore
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 md:items-center"
+        >
           <div className="w-full max-w-lg rounded-2xl border border-zinc-700 bg-zinc-900 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-white">Verbesserung notieren</h3>
@@ -120,6 +137,21 @@ export function FeedbackWidget() {
               rows={4}
               className="resize-none border-zinc-700 bg-zinc-950 text-zinc-100"
             />
+
+            <label className="mt-3 block space-y-2">
+              <span className="text-xs font-medium text-zinc-400">Kategorie</span>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as FeedbackCategory)}
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              >
+                {FEEDBACK_CATEGORIES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button

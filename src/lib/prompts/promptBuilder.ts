@@ -17,13 +17,14 @@ Return ONLY a JSON object, nothing else:
 1. Always English - image models work better with English prompts
 2. If text_custom is present, include that exact text literally in the prompt in double quotes, with clear placement instruction (usually top)
    -> Keep spelling exactly as provided by user
-3. Always end with technical specs: "transparent background, centered composition, suitable for t-shirt print, flat design, vector-like clean edges"
+3. Always ask for a clean product mockup preview: selected shirt/product color as the base, artwork placed naturally on the chest/front print area, no fake transparency checkerboard.
 4. Match the style precisely to the style field from session data
 5. If insider info is present, make it the visual centerpiece
 6. If photo_upload is true, skip character design - just describe scene/background/style (the face will be added via Gemini separately)
 7. For group designs: describe N characters without specific faces
 8. Keep it focused - one strong visual idea, not five
 9. Humor/party scenes are allowed, but keep characters adult and avoid explicit harm/injury
+10. Treat the supplied print template as mandatory production guidance. Create a clean e-commerce preview on the selected product, not a floating PNG asset.
 
 ## Style -> Prompt translation
 

@@ -2,6 +2,7 @@
 
 interface MockupPreviewProps {
   designUrl: string | null;
+  product?: "tshirt" | "hoodie" | "tasse" | "poster";
   productColor: string;
   printArea: "front" | "back" | "both";
 }
@@ -13,9 +14,22 @@ const COLOR_MAP: Record<string, string> = {
   grey: "#6b7280",
 };
 
-export function MockupPreview({ designUrl, productColor, printArea }: MockupPreviewProps) {
+export function MockupPreview({
+  designUrl,
+  product = "tshirt",
+  productColor,
+  printArea,
+}: MockupPreviewProps) {
   const bgColor = COLOR_MAP[productColor] ?? "#ffffff";
   const textColor = productColor === "white" ? "#000" : "#fff";
+  const productLabel =
+    product === "hoodie"
+      ? "Hoodie"
+      : product === "tasse"
+        ? "Tasse"
+        : product === "poster"
+          ? "Poster"
+          : "T-Shirt";
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -41,17 +55,18 @@ export function MockupPreview({ designUrl, productColor, printArea }: MockupPrev
 
         {!designUrl && (
           <div className="z-10 text-center" style={{ color: textColor }}>
-            <p className="text-xs opacity-50">Kein Design gewaehlt</p>
+            <p className="text-xs opacity-50">Kein Design gewählt</p>
           </div>
         )}
       </div>
 
       <p className="text-xs text-zinc-500">
+        {productLabel} ·{" "}
         {printArea === "front"
           ? "Vorderseite"
           : printArea === "back"
-            ? "Rueckseite"
-            : "Vorder- & Rueckseite"}
+            ? "Rückseite"
+            : "Vorder- & Rückseite"}
       </p>
     </div>
   );

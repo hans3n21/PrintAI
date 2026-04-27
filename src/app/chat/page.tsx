@@ -1,20 +1,17 @@
 "use client";
 
 import { ChatBubble } from "@/components/chat/ChatBubble";
-import { ChatInput } from "@/components/chat/ChatInput";
+import { PromptComposer } from "@/components/chat/PromptComposer";
 import { QuickReplyButtons } from "@/components/chat/QuickReplyButtons";
 import { Header } from "@/components/layout/Header";
+import { FeedbackWidget } from "@/components/notes/FeedbackWidget";
 import { Button } from "@/components/ui/button";
-import type { ChatMessage } from "@/lib/types";
-import { ImagePlus, Loader2, Sparkles, SkipForward } from "lucide-react";
+import { getQuickRepliesForAssistantReply } from "@/lib/chatQuickReplies";
+import { supabase } from "@/lib/supabase";
+import type { ChatMessage, ProductColor, ProductSelection } from "@/lib/types";
+import { Loader2, Sparkles, SkipForward } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState, type ChangeEvent } from "react";
-
-const QUICK_REPLIES: Record<string, string[]> = {
-  group: ["Nur fuer mich", "Fuer eine Gruppe"],
-  style: ["Cartoon/witzig", "Modern/clean", "Vintage", "Minimalistisch"],
-  yn: ["Ja", "Nein"],
-};
+import { Suspense, useEffect, useRef, useState } from "react";
 
 function ChatPageInner() {
   const searchParams = useSearchParams();
@@ -26,10 +23,22 @@ function ChatPageInner() {
   const [loading, setLoading] = useState(false);
   const [skipLoading, setSkipLoading] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [productSelection, setProductSelection] = useState<ProductSelection | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const sendMessage = async (text: string, imageBase64?: string | null) => {
+  let lastAssistant: { index: number; content: string } | null = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "assistant") {
+      lastAssistant = { index: i, content: messages[i].content };
+      break;
+    }
+  }
+
+  const sendMessage = async (
+    text: string,
+    imageBase64?: string | null,
+    options?: { isVoice?: boolean }
+  ) => {
     if (!sessionId || loading) return;
     const img = imageBase64 ?? pendingImage;
     if (!text.trim() && !img) return;
@@ -38,8 +47,10 @@ function ChatPageInner() {
     setQuickReplies([]);
 
     const displayUser =
-      text.trim() ||
-      (img ? "(Foto als Referenz gesendet)" : "");
+      options?.isVoice
+        ? `[voice]${text.trim()}`
+        : text.trim() ||
+          (img ? "(Foto als Referenz gesendet)" : "");
     setMessages((prev) => [...prev, { role: "user", content: displayUser }]);
 
     const res = await fetch("/api/chat", {
@@ -88,10 +99,7 @@ function ChatPageInner() {
       ]);
       setTimeout(() => router.push(`/designs/${sessionId}`), 1500);
     } else {
-      const reply = String(data.reply ?? "").toLowerCase();
-      if (reply.includes("gruppe") || reply.includes("allein")) setQuickReplies(QUICK_REPLIES.group);
-      else if (reply.includes("stil") || reply.includes("cartoon") || reply.includes("vintage")) setQuickReplies(QUICK_REPLIES.style);
-      else if (reply.includes("ja") || reply.includes("nein") || reply.includes("namen")) setQuickReplies(QUICK_REPLIES.yn);
+      setQuickReplies(getQuickRepliesForAssistantReply(String(data.reply ?? "")));
     }
   };
 
@@ -115,7 +123,7 @@ function ChatPageInner() {
           content:
             typeof data.error === "string"
               ? data.error
-              : "Konnte nicht ueberspringen. Bitte noch kurz per Text antworten.",
+              : "Konnte nicht überspringen. Bitte noch kurz per Text antworten.",
         },
       ]);
       setSkipLoading(false);
@@ -124,7 +132,7 @@ function ChatPageInner() {
 
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: "(Uebersprungen: weiter zu Designs)" },
+      { role: "user", content: "(Übersprungen: weiter zu Designs)" },
       { role: "assistant", content: data.reply },
     ]);
     setSkipLoading(false);
@@ -146,27 +154,59 @@ function ChatPageInner() {
     }
   };
 
-  const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const r = reader.result;
-      if (typeof r === "string") setPendingImage(r);
-    };
-    reader.readAsDataURL(file);
+  const handleColorChange = (color: ProductColor) => {
+    setProductSelection((prev) => {
+      const next: ProductSelection = {
+        product: prev?.product ?? "tshirt",
+        product_color: color,
+        quantity: prev?.quantity ?? 1,
+      };
+      if (sessionId) {
+        void supabase
+          .from("sessions")
+          .update({
+            product_selection: next,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", sessionId);
+      }
+      return next;
+    });
   };
+
+  const selectedColor = productSelection?.product_color ?? "black";
 
   useEffect(() => {
     if (!sessionId) return;
     const initial = sessionStorage.getItem(`printai_initial_${sessionId}`);
+    const initialImage = sessionStorage.getItem(`printai_initial_image_${sessionId}`);
     if (initial) {
       sessionStorage.removeItem(`printai_initial_${sessionId}`);
+      sessionStorage.removeItem(`printai_initial_image_${sessionId}`);
       setTimeout(() => {
-        void sendMessage(initial);
+        void sendMessage(initial, initialImage);
       }, 0);
+      return;
     }
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("sessions")
+        .select("conversation_history, product_selection")
+        .eq("id", sessionId)
+        .single();
+      if (!cancelled && data?.conversation_history) {
+        setMessages(data.conversation_history as ChatMessage[]);
+      }
+      if (!cancelled && data?.product_selection) {
+        setProductSelection(data.product_selection as ProductSelection);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // sendMessage is intentionally excluded so the initial sessionStorage handoff
+    // runs once for a new session instead of re-sending while state changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
@@ -179,30 +219,7 @@ function ChatPageInner() {
       <Header />
       <div className="flex flex-1 flex-col">
         <div className="mx-auto flex w-full max-w-xl flex-1 flex-col">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-4 py-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={onFileChange}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="border-zinc-700 text-zinc-300"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={loading || skipLoading}
-              >
-                <ImagePlus className="mr-2 h-4 w-4" />
-                Foto
-              </Button>
-              {pendingImage && (
-                <span className="text-xs text-violet-400">Referenzbild gewaehlt</span>
-              )}
-            </div>
+          <div className="flex justify-end border-b border-zinc-800 px-4 py-2">
             <Button
               type="button"
               variant="ghost"
@@ -255,14 +272,34 @@ function ChatPageInner() {
           </div>
 
           <div className="border-t border-zinc-800">
-            <ChatInput
-              onSend={(text) => void sendMessage(text)}
-              disabled={loading || skipLoading}
-              hasAttachment={!!pendingImage}
-            />
+            <div className="p-4">
+              <PromptComposer
+                onSend={(text, options) => void sendMessage(text, undefined, options)}
+                disabled={loading || skipLoading}
+                loading={loading}
+                variant="chat"
+                placeholder="Antwort eingeben..."
+                selectedColor={selectedColor}
+                onColorChange={handleColorChange}
+                attachmentPreview={pendingImage}
+                onAttachmentChange={setPendingImage}
+              />
+            </div>
           </div>
         </div>
       </div>
+      <FeedbackWidget
+        sessionId={sessionId}
+        targetType="chat_session"
+        targetRef={lastAssistant ? `assistant:${lastAssistant.index}` : undefined}
+        assistantOutput={lastAssistant?.content}
+        conversationSnapshot={messages}
+        clientState={{
+          pendingImage: Boolean(pendingImage),
+          loading,
+          skipLoading,
+        }}
+      />
     </div>
   );
 }

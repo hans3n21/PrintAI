@@ -1,9 +1,11 @@
 "use client";
 
+import { ImageGallery } from "@/components/checkout/ImageGallery";
 import { Header } from "@/components/layout/Header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
+import type { ReferenceImageAsset } from "@/lib/types";
 import { CheckCircle, Package } from "lucide-react";
 import { use, useEffect, useState } from "react";
 
@@ -13,17 +15,21 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
   const [orderId, setOrderId] = useState("");
   const [loading, setLoading] = useState(false);
   const [designUrl, setDesignUrl] = useState<string | null>(null);
+  const [designUrls, setDesignUrls] = useState<string[]>([]);
+  const [referenceImages, setReferenceImages] = useState<ReferenceImageAsset[]>([]);
   const [config, setConfig] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     void supabase
       .from("sessions")
-      .select("selected_design_url, config, selected_slogan")
+      .select("selected_design_url, design_urls, reference_images, config, selected_slogan")
       .eq("id", sessionId)
       .single()
       .then(({ data }) => {
         if (!data) return;
         setDesignUrl(data.selected_design_url);
+        setDesignUrls((data.design_urls ?? []) as string[]);
+        setReferenceImages((data.reference_images ?? []) as ReferenceImageAsset[]);
         setConfig((data.config ?? {}) as Record<string, unknown>);
       });
   }, [sessionId]);
@@ -58,7 +64,15 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
           </div>
           <div className="flex items-center gap-2 rounded-xl bg-zinc-800 px-4 py-3 text-sm text-zinc-400">
             <Package className="h-4 w-4" />
-            Printify wuerde jetzt produzieren und direkt versenden.
+            Printify würde jetzt produzieren und direkt versenden.
+          </div>
+          <div className="w-full max-w-xl">
+            <ImageGallery
+              designUrls={designUrls}
+              selectedDesignUrl={designUrl}
+              referenceImages={referenceImages}
+              title="Eure Galerie"
+            />
           </div>
           <Button
             onClick={() => {
@@ -83,7 +97,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
         {designUrl && (
           <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={designUrl} alt="Gewaehltes Design" className="h-48 w-full object-contain p-4" />
+            <img src={designUrl} alt="Gewähltes Design" className="h-48 w-full object-contain p-4" />
           </div>
         )}
 
@@ -98,7 +112,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
           </div>
           <div className="flex justify-between text-zinc-400">
             <span>Menge</span>
-            <span className="text-zinc-200">{String(config.quantity ?? 1)} Stueck</span>
+            <span className="text-zinc-200">{String(config.quantity ?? 1)} Stück</span>
           </div>
         </div>
 

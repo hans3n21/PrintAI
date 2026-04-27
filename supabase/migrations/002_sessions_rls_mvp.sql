@@ -1,4 +1,5 @@
--- MVP: Browser nutzt anon-Key und kennt nur die session-UUID aus der URL.
+,, xY>Y> X;y<<+
+- MVP: Browser nutzt anon-Key und kennt nur die session-UUID aus der URL.
 -- Ohne Policies blockiert RLS alle Zugriffe -> Designs/Configure haengen oder sind leer.
 -- Vor Produktion durch echte Auth + restriktive Policies ersetzen.
 
@@ -14,3 +15,4 @@ create policy "mvp_sessions_update"
   on sessions for update
   using (true)
   with check (true);
+y>/

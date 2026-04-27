@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 
 const COLORS = [
-  { id: "white", label: "Weiss", hex: "#ffffff" },
+  { id: "white", label: "Weiß", hex: "#ffffff" },
   { id: "black", label: "Schwarz", hex: "#1a1a1a" },
   { id: "navy", label: "Navy", hex: "#1e3a5f" },
   { id: "grey", label: "Grau", hex: "#6b7280" },

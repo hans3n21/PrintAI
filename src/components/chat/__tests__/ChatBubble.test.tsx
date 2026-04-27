@@ -16,7 +16,7 @@ describe("ChatBubble", () => {
   });
 
   it("displays message content", () => {
-    render(<ChatBubble role="assistant" content="Was moechtest du gestalten?" />);
-    expect(screen.getByText("Was moechtest du gestalten?")).toBeInTheDocument();
+    render(<ChatBubble role="assistant" content="Was möchtest du gestalten?" />);
+    expect(screen.getByText("Was möchtest du gestalten?")).toBeInTheDocument();
   });
 });

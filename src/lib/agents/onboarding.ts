@@ -4,7 +4,12 @@ import {
   OPENAI_CHAT_MODEL,
   stripMarkdownFencedJson,
 } from "@/lib/openai";
-import type { ChatMessage, OnboardingData } from "@/lib/types";
+import type {
+  ChatMessage,
+  OnboardingData,
+  ProductSelection,
+  ReferenceImageAsset,
+} from "@/lib/types";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 type OnboardingIncomplete = {
@@ -19,6 +24,12 @@ type OnboardingComplete = {
 };
 
 export type OnboardingResult = OnboardingIncomplete | OnboardingComplete;
+
+type OnboardingOptions = {
+  referenceImageUrl?: string;
+  productSelection?: ProductSelection | null;
+  referenceImages?: ReferenceImageAsset[];
+};
 
 /** Extract first balanced {...} substring (best-effort for model output with extra prose). */
 function extractBalancedJsonObject(text: string): string | null {
@@ -87,6 +98,9 @@ function tryParseCompletePayload(
       ) {
         return { data: parsed.data, summary: parsed.summary };
       }
+      if (looksLikeOnboardingData(parsed)) {
+        return { data: parsed, summary: extractSummary(raw, parsed) };
+      }
     } catch {
       // try next candidate
     }
@@ -94,10 +108,30 @@ function tryParseCompletePayload(
   return null;
 }
 
+function looksLikeOnboardingData(value: unknown): value is OnboardingData {
+  if (!value || typeof value !== "object") return false;
+  const data = value as Partial<OnboardingData>;
+  return (
+    typeof data.event_type === "string" &&
+    typeof data.style === "string" &&
+    typeof data.product === "string" &&
+    typeof data.tonality === "string"
+  );
+}
+
+function extractSummary(raw: string, data: OnboardingData): string {
+  const explicit = /Zusammenfassung:\s*([\s\S]+)$/i.exec(raw)?.[1]?.trim();
+  if (explicit) return explicit.replace(/^["']|["']$/g, "");
+
+  const motif = data.insider ?? data.text_custom ?? "deinem Motiv";
+  const product = data.product === "tshirt" ? "T-Shirt" : data.product;
+  return `Alles klar! Ich erstelle ein ${data.tonality}es ${data.style}-${product} mit ${motif}.`;
+}
+
 export async function runForceCompleteOnboarding(
   history: ChatMessage[]
 ): Promise<OnboardingResult> {
-  const system = `Du bist ein Backend-Parser fuer PrintAI.
+  const system = `Du bist ein Backend-Parser für PrintAI.
 Lies den bisherigen Chat zwischen Nutzer und Assistent.
 Erzeuge EIN einziges JSON-Objekt (kein Markdown, keine Erklaerung davor oder danach) mit exakt dieser Struktur:
 {
@@ -115,9 +149,9 @@ Erzeuge EIN einziges JSON-Objekt (kein Markdown, keine Erklaerung davor oder dan
     "insider": string | null,
     "tonality": "witzig" | "ernst" | "elegant" | "frech"
   },
-  "summary": "Kurze deutsche Zusammenfassung fuer den Nutzer."
+  "summary": "Kurze deutsche Zusammenfassung für den Nutzer."
 }
-Nutze sinnvolle Defaults fuer fehlende Infos (z.B. product tshirt, style cartoon, event sonstiges, tonality witzig, group false, group_size null, names null, text_custom null, insider null, photo_upload false, date null).`;
+Nutze sinnvolle Defaults für fehlende Infos (z.B. product tshirt, style cartoon, event sonstiges, tonality witzig, group false, group_size null, names null, text_custom null, insider null, photo_upload false, date null).`;
 
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: system },
@@ -150,14 +184,14 @@ Nutze sinnvolle Defaults fuer fehlende Infos (z.B. product tshirt, style cartoon
   return {
     complete: false,
     reply:
-      "Konnte das Onboarding nicht automatisch abschliessen. Bitte schreib noch kurz Anlass, Stil und Produkt (z.B. T-Shirt).",
+      "Konnte das Onboarding nicht automatisch abschließen. Bitte schreib noch kurz Anlass, Stil und Produkt (z.B. T-Shirt).",
   };
 }
 
 export async function runOnboardingMessage(
   history: ChatMessage[],
   userMessage: string,
-  options?: { referenceImageUrl?: string }
+  options?: OnboardingOptions
 ): Promise<OnboardingResult> {
   const userBlock: ChatCompletionMessageParam =
     options?.referenceImageUrl != null
@@ -175,6 +209,22 @@ export async function runOnboardingMessage(
 
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: ONBOARDING_SYSTEM_PROMPT },
+    {
+      role: "system",
+      content: `Bekannter UI-Kontext (nicht erneut abfragen, sondern verwenden):\n${JSON.stringify(
+        {
+          product_selection: options?.productSelection ?? null,
+          reference_image_count: options?.referenceImages?.length ?? 0,
+          rules: [
+            "Frage nicht nach Produkt, Farbe oder Menge, wenn product_selection gesetzt ist.",
+            "Frage nicht nach Gruppe oder Anzahl, wenn quantity gesetzt ist.",
+            "Wenn quantity 1 ist oder der Nutzer nur fuer mich sagt, ist group false und group_size 1.",
+          ],
+        },
+        null,
+        2
+      )}`,
+    },
     ...history.map(
       (m): ChatCompletionMessageParam => ({
         role: m.role,
@@ -188,7 +238,7 @@ export async function runOnboardingMessage(
     model: OPENAI_CHAT_MODEL,
     messages,
     max_tokens: 400,
-    temperature: 0.7,
+    temperature: 0.2,
   });
 
   const raw = response.choices[0]?.message?.content ?? "";

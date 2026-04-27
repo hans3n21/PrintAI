@@ -5,8 +5,24 @@ interface ChatBubbleProps {
   content: string;
 }
 
+function StaticVoiceWaveform() {
+  return (
+    <div className="flex h-6 items-center gap-1">
+      {Array.from({ length: 16 }, (_, i) => (
+        <span
+          key={i}
+          className="w-0.5 rounded-full bg-white/80"
+          style={{ height: `${7 + ((i * 5) % 17)}px` }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function ChatBubble({ role, content }: ChatBubbleProps) {
   const isAssistant = role === "assistant";
+  const isVoiceMessage = !isAssistant && content.startsWith("[voice]");
+  const visibleContent = isVoiceMessage ? content.replace(/^\[voice\]/, "") : content;
 
   return (
     <div className={cn("flex", isAssistant ? "justify-start" : "justify-end")}>
@@ -18,7 +34,14 @@ export function ChatBubble({ role, content }: ChatBubbleProps) {
             : "rounded-tr-sm bg-violet-600 text-white"
         )}
       >
-        {content}
+        {isVoiceMessage ? (
+          <div className="flex items-center gap-3">
+            <StaticVoiceWaveform />
+            <span>{visibleContent}</span>
+          </div>
+        ) : (
+          visibleContent
+        )}
       </div>
     </div>
   );
