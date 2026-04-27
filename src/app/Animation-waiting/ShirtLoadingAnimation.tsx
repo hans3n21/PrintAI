@@ -24,7 +24,7 @@ const RAGE_MESSAGES = [
   "Mein Opa war schneller... Auf Papier. Mit Stift.",
   "73%?! SEIT EINER EWIGKEIT?!",
   "Ich ruf den Chef des Internets an.",
-  "AAAAAAAAAAAAAAAAAAAAAAAHHHHHH!!!!!!!",
+  "AAAAAAAAAAAAAAAAHHHHHH!!!!!!!",
 ];
 
 // ── Timings (ms) ─────────────────────────────────────────────────────────────
@@ -81,16 +81,19 @@ export default function ShirtLoadingAnimation() {
   const [rageVis,   setRageVis]   = useState(true);
   const [barPct,    setBarPct]    = useState(0);
 
-  const timers  = useRef<ReturnType<typeof setTimeout>[]>([]);
   const rafRef  = useRef<number>(0);
   const barStart = useRef<number>(0);
-  const add = (t: ReturnType<typeof setTimeout>) => timers.current.push(t);
 
   // Main timeline
   useEffect(() => {
-    add(setTimeout(() => setShowHeadline(true), T_HEADLINE));
-    add(setTimeout(() => setShowSubtitle(true), T_SUBTITLE));
-    add(setTimeout(() => {
+    const timelineTimers: ReturnType<typeof setTimeout>[] = [];
+    const addTimeline = (timer: ReturnType<typeof setTimeout>) => {
+      timelineTimers.push(timer);
+    };
+
+    addTimeline(setTimeout(() => setShowHeadline(true), T_HEADLINE));
+    addTimeline(setTimeout(() => setShowSubtitle(true), T_SUBTITLE));
+    addTimeline(setTimeout(() => {
       setShowBar(true);
       barStart.current = performance.now();
       const tick = () => {
@@ -101,12 +104,12 @@ export default function ShirtLoadingAnimation() {
       };
       rafRef.current = requestAnimationFrame(tick);
     }, T_BAR));
-    add(setTimeout(() => setShowPrinter(true), T_PRINTER));
-    add(setTimeout(() => setShowText(true),    T_TEXT));
-    add(setTimeout(() => setShowBunny(true),   T_BUNNY));
-    add(setTimeout(() => setRaging(true),      T_RAGE));
+    addTimeline(setTimeout(() => setShowPrinter(true), T_PRINTER));
+    addTimeline(setTimeout(() => setShowText(true),    T_TEXT));
+    addTimeline(setTimeout(() => setShowBunny(true),   T_BUNNY));
+    addTimeline(setTimeout(() => setRaging(true),      T_RAGE));
     return () => {
-      timers.current.forEach(clearTimeout);
+      timelineTimers.forEach(clearTimeout);
       cancelAnimationFrame(rafRef.current);
     };
   }, []);
@@ -114,22 +117,32 @@ export default function ShirtLoadingAnimation() {
   // Status messages
   useEffect(() => {
     if (!showText) return;
+    const statusTimers: ReturnType<typeof setTimeout>[] = [];
     const iv = setInterval(() => {
       setStatusVis(false);
-      add(setTimeout(() => { setStatusIdx(i => (i + 1) % STATUS_MESSAGES.length); setStatusVis(true); }, 500));
+      statusTimers.push(setTimeout(() => { setStatusIdx(i => (i + 1) % STATUS_MESSAGES.length); setStatusVis(true); }, 500));
     }, 5_000);
-    return () => clearInterval(iv);
+    return () => {
+      statusTimers.forEach(clearTimeout);
+      clearInterval(iv);
+    };
   }, [showText]);
 
   // Rage messages
   useEffect(() => {
     if (!raging) return;
-    setRageIdx(Math.floor(Math.random() * RAGE_MESSAGES.length));
+    const rageTimers: ReturnType<typeof setTimeout>[] = [];
+    rageTimers.push(setTimeout(() => {
+      setRageIdx(Math.floor(Math.random() * RAGE_MESSAGES.length));
+    }, 0));
     const iv = setInterval(() => {
       setRageVis(false);
-      add(setTimeout(() => { setRageIdx(i => (i + 1) % RAGE_MESSAGES.length); setRageVis(true); }, 500));
+      rageTimers.push(setTimeout(() => { setRageIdx(i => (i + 1) % RAGE_MESSAGES.length); setRageVis(true); }, 500));
     }, 5_500);
-    return () => clearInterval(iv);
+    return () => {
+      rageTimers.forEach(clearTimeout);
+      clearInterval(iv);
+    };
   }, [raging]);
 
   const fadeStyle = (show: boolean, delay = "0s"): React.CSSProperties => ({

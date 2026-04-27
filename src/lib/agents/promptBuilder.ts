@@ -67,6 +67,7 @@ export function buildPromptFromCreativeBrief(
     parts.push(`Avoid: ${brief.avoid.join(", ")}.`);
   }
   parts.push(
+    "Safety guide: Keep the scene non-violent and playful; no weapons, blood, injury, gore, fighting, or threatening action.",
     "Technical specs: mockup preview, opaque product background, no checkerboard transparency pattern, clean product silhouette, centered composition, flat design, vector-like clean edges, high contrast readable typography. Do not render a checkerboard."
   );
 

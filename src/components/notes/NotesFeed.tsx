@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { AppSurface, primaryActionClassName, secondaryActionClassName } from "@/components/ui/appSurface";
 import type { ChatMessage } from "@/lib/types";
 
 type FeedbackNote = {
@@ -32,7 +33,7 @@ function ContextDetails({ note }: { note: FeedbackNote }) {
   if (!hasContext) return null;
 
   return (
-    <details className="mt-3 rounded-lg border border-zinc-800 bg-zinc-900 p-2">
+    <details className="mt-3 rounded-2xl border border-zinc-700/70 bg-zinc-900/70 p-3">
       <summary className="cursor-pointer text-xs font-medium text-zinc-300">
         Kontext anzeigen
       </summary>
@@ -71,7 +72,7 @@ function ContextDetails({ note }: { note: FeedbackNote }) {
       {note.client_state && (
         <div className="mt-3">
           <p className="text-xs uppercase tracking-wide text-zinc-500">Client-State</p>
-          <pre className="mt-1 overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-300">
+          <pre className="mt-1 overflow-auto rounded-2xl bg-zinc-950/70 p-3 text-xs text-zinc-300">
             {JSON.stringify(note.client_state, null, 2)}
           </pre>
         </div>
@@ -133,7 +134,7 @@ export function NotesFeed() {
   const archivedNotes = notes.filter((n) => n.resolved);
 
   return (
-    <section className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
+    <AppSurface className="mt-8">
       <h3 className="text-sm font-semibold text-zinc-200">Notizen & Verbesserungsideen</h3>
       <p className="mt-1 text-xs text-zinc-500">
         Offene Einträge werden zuerst angezeigt. Erledigte Einträge bleiben im Archiv.
@@ -149,7 +150,7 @@ export function NotesFeed() {
       )}
       <div className="mt-2 space-y-3">
         {openNotes.map((n) => (
-          <article key={n.id} className="rounded-xl border border-zinc-800 bg-zinc-950 p-3">
+          <article key={n.id} className="rounded-2xl border border-zinc-700/70 bg-zinc-950/50 p-4">
             <p className="text-sm text-zinc-100">{n.note}</p>
             {n.category && (
               <span className="mt-2 inline-block rounded-full bg-zinc-800 px-2 py-1 text-xs text-zinc-300">
@@ -177,7 +178,7 @@ export function NotesFeed() {
                 size="sm"
                 onClick={() => void setResolved(n.id, true)}
                 disabled={busyId === n.id}
-                className="bg-emerald-600 hover:bg-emerald-700"
+                className={primaryActionClassName("bg-emerald-600 shadow-emerald-950/30 hover:bg-emerald-700")}
               >
                 Erledigt
               </Button>
@@ -186,7 +187,7 @@ export function NotesFeed() {
                 variant="outline"
                 onClick={() => void deleteNote(n.id)}
                 disabled={busyId === n.id}
-                className="border-zinc-700 text-zinc-300"
+                className={secondaryActionClassName()}
               >
                 Löschen
               </Button>
@@ -196,7 +197,7 @@ export function NotesFeed() {
       </div>
 
       {!loading && archivedNotes.length > 0 && (
-        <div className="mt-6 flex items-center justify-between gap-3 border-t border-zinc-800 pt-4">
+        <div className="mt-6 flex items-center justify-between gap-3 border-t border-zinc-800/70 pt-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-zinc-500">Archiv</p>
             <p className="mt-1 text-xs text-zinc-600">
@@ -208,7 +209,7 @@ export function NotesFeed() {
             size="sm"
             variant="outline"
             onClick={() => setShowArchive((v) => !v)}
-            className="border-zinc-700 text-zinc-300"
+            className={secondaryActionClassName()}
           >
             {showArchive ? "Archiv ausblenden" : "Archiv anzeigen"}
           </Button>
@@ -221,7 +222,7 @@ export function NotesFeed() {
             {archivedNotes.map((n) => (
               <article
                 key={n.id}
-                className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 opacity-90"
+                className="rounded-2xl border border-zinc-700/70 bg-zinc-950/40 p-4 opacity-90"
               >
                 <p className="text-sm text-zinc-200">{n.note}</p>
                 {n.category && (
@@ -256,7 +257,7 @@ export function NotesFeed() {
                     variant="outline"
                     onClick={() => void setResolved(n.id, false)}
                     disabled={busyId === n.id}
-                    className="border-zinc-700 text-zinc-300"
+                    className={secondaryActionClassName()}
                   >
                     Wieder öffnen
                   </Button>
@@ -265,7 +266,7 @@ export function NotesFeed() {
                     variant="outline"
                     onClick={() => void deleteNote(n.id)}
                     disabled={busyId === n.id}
-                    className="border-zinc-700 text-zinc-300"
+                    className={secondaryActionClassName()}
                   >
                     Löschen
                   </Button>
@@ -275,6 +276,6 @@ export function NotesFeed() {
           </div>
         </>
       )}
-    </section>
+    </AppSurface>
   );
 }

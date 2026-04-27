@@ -25,8 +25,10 @@ export function ColorPicker({ selected, onChange }: ColorPickerProps) {
             title={c.label}
             onClick={() => onChange(c.id)}
             className={cn(
-              "h-8 w-8 rounded-full border-2 transition-all",
-              selected === c.id ? "scale-110 border-violet-500" : "border-zinc-600 hover:border-zinc-400"
+              "h-9 w-9 rounded-full border shadow-sm shadow-black/30 transition-all",
+              selected === c.id
+                ? "scale-110 border-violet-300 ring-2 ring-violet-500/60"
+                : "border-zinc-600 hover:-translate-y-0.5 hover:border-zinc-300"
             )}
             style={{ backgroundColor: c.hex }}
           />

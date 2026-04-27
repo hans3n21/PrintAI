@@ -16,7 +16,7 @@ export function TextEditor({ value, onChange, label = "Text bearbeiten" }: TextE
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="z.B. FC Einheit 2026"
-        className="border-zinc-700 bg-zinc-900 text-zinc-100"
+        className="rounded-full border-zinc-700/80 bg-zinc-950/60 px-4 text-zinc-100 placeholder:text-zinc-500 focus-visible:border-violet-500 focus-visible:ring-violet-500/20"
       />
     </div>
   );

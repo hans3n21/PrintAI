@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PromptComposer } from "@/components/chat/PromptComposer";
+import { SavedGalleryButton } from "@/components/gallery/SavedGalleryButton";
 import { FeedbackWidget } from "@/components/notes/FeedbackWidget";
+import { AppNotice } from "@/components/ui/appSurface";
 import type { ProductColor, ProductSelection } from "@/lib/types";
 
 export default function LandingPage() {
@@ -66,10 +68,10 @@ export default function LandingPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-lg space-y-8">
+    <main className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
+      <div className="w-full max-w-xl space-y-8">
         <div className="text-center">
-          <h1 className="text-5xl font-black tracking-tight text-white">
+          <h1 className="text-5xl font-black tracking-tight text-white sm:text-6xl">
             Print<span className="text-violet-400">AI</span>
           </h1>
           <p className="mt-3 text-lg text-zinc-400">Dein Design. In Minuten.</p>
@@ -77,9 +79,9 @@ export default function LandingPage() {
 
         <div className="space-y-3">
           {error && (
-            <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <AppNotice tone="error">
               {error}
-            </p>
+            </AppNotice>
           )}
           <PromptComposer
             placeholder="Was möchtest du gestalten?"
@@ -96,6 +98,7 @@ export default function LandingPage() {
           />
         </div>
       </div>
+      <SavedGalleryButton />
       <FeedbackWidget />
     </main>
   );

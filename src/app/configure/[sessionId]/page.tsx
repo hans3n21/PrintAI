@@ -5,7 +5,16 @@ import { MockupPreview } from "@/components/configure/MockupPreview";
 import { TextEditor } from "@/components/configure/TextEditor";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
+import {
+  AppSurface,
+  FieldGroup,
+  PageShell,
+  PageTitle,
+  primaryActionClassName,
+  secondaryActionClassName,
+} from "@/components/ui/appSurface";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import type { OnboardingData, ProductSelection, SloganOption } from "@/lib/types";
 import { ShoppingCart } from "lucide-react";
@@ -76,8 +85,13 @@ export default function ConfigurePage({ params }: { params: Promise<{ sessionId:
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="mx-auto w-full max-w-xl space-y-6 p-4">
-        <h2 className="text-xl font-bold text-white">Dein Design konfigurieren</h2>
+      <main>
+        <PageShell>
+        <PageTitle
+          eyebrow="Konfiguration"
+          title="Dein Design konfigurieren"
+          description="Passe Farbe, Druckbereich, Text und Menge für die Bestellung an."
+        />
 
         <MockupPreview
           designUrl={designUrl}
@@ -86,10 +100,10 @@ export default function ConfigurePage({ params }: { params: Promise<{ sessionId:
           printArea={printArea}
         />
 
-        <ColorPicker selected={color} onChange={setColor} />
+        <AppSurface className="space-y-5">
+          <ColorPicker selected={color} onChange={setColor} />
 
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-zinc-400">Druckbereich</p>
+        <FieldGroup label="Druckbereich">
           <div className="flex gap-2">
             {(["front", "back", "both"] as const).map((area) => (
               <Button
@@ -97,18 +111,23 @@ export default function ConfigurePage({ params }: { params: Promise<{ sessionId:
                 variant={printArea === area ? "default" : "outline"}
                 size="sm"
                 onClick={() => setPrintArea(area)}
-                className={printArea === area ? "bg-violet-600" : "border-zinc-700 text-zinc-300"}
+                className={
+                  printArea === area
+                    ? primaryActionClassName("px-4")
+                    : secondaryActionClassName("px-4")
+                }
               >
                 {area === "front" ? "Vorne" : area === "back" ? "Hinten" : "Vorne + Hinten"}
               </Button>
             ))}
           </div>
-        </div>
+        </FieldGroup>
 
         <TextEditor value={customText} onChange={setCustomText} label="Text auf dem Design" />
+        </AppSurface>
 
         {names.length > 0 && (
-          <div className="space-y-2">
+          <AppSurface className="space-y-3">
             <p className="text-sm font-medium text-zinc-400">Größen ({names.length} Personen)</p>
             <div className="space-y-2">
               {names.map((name) => (
@@ -119,11 +138,12 @@ export default function ConfigurePage({ params }: { params: Promise<{ sessionId:
                       <button
                         key={s}
                         onClick={() => setSizes((prev) => ({ ...prev, [name]: s }))}
-                        className={`rounded px-2 py-1 text-xs transition-colors ${
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-xs transition-colors",
                           sizes[name] === s
-                            ? "bg-violet-600 text-white"
-                            : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                        }`}
+                            ? "bg-violet-600 text-white shadow-sm shadow-violet-950/40"
+                            : "border border-zinc-700/70 bg-zinc-900/70 text-zinc-400 hover:bg-zinc-800"
+                        )}
                       >
                         {s}
                       </button>
@@ -132,11 +152,12 @@ export default function ConfigurePage({ params }: { params: Promise<{ sessionId:
                 </div>
               ))}
             </div>
-          </div>
+          </AppSurface>
         )}
 
-        <Separator className="border-zinc-800" />
+        <Separator className="border-zinc-800/70" />
 
+        <AppSurface className="space-y-4">
         <label className="block space-y-2">
           <span className="text-sm font-medium text-zinc-400">Menge</span>
           <input
@@ -145,7 +166,7 @@ export default function ConfigurePage({ params }: { params: Promise<{ sessionId:
             max={999}
             value={quantityOverride}
             onChange={(e) => setQuantityOverride(Math.max(1, Number.parseInt(e.target.value || "1", 10)))}
-            className="w-28 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            className="w-28 rounded-full border border-zinc-700/80 bg-zinc-950/60 px-4 py-2 text-sm text-zinc-100 outline-none transition focus:border-violet-500"
           />
         </label>
 
@@ -159,10 +180,12 @@ export default function ConfigurePage({ params }: { params: Promise<{ sessionId:
             </p>
             <p className="text-xl font-bold text-white">{total} EUR</p>
           </div>
-          <Button onClick={() => void handleCheckout()} className="bg-violet-600 px-6 hover:bg-violet-700">
+          <Button onClick={() => void handleCheckout()} className={primaryActionClassName("px-6")}>
             <ShoppingCart className="mr-2 h-4 w-4" /> In den Warenkorb
           </Button>
         </div>
+        </AppSurface>
+        </PageShell>
       </main>
     </div>
   );

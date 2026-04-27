@@ -32,6 +32,13 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
   users position, scale, and rotate the motif before continuing. Keep the image
   generation prompt focused on an isolated printable motif, not a full shirt
   mockup, so the mockup remains a UI preview and not the production print file.
+- Add a team and logo placement mode: detect when users want to upload or create
+  a logo for a shirt, show an interactive shirt inside the chat, let users pick
+  print zones such as left chest, center chest, back, or sleeves, and store that
+  placement as structured order data. For clubs or teams, parse names, numbers,
+  sizes, sponsors, and club logos from chat input, generate a reusable team
+  template, and create separate personalized variants when names or numbers are
+  provided.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

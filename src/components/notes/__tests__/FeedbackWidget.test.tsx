@@ -84,4 +84,15 @@ describe("FeedbackWidget", () => {
     );
     expect(getDisplayMedia).not.toHaveBeenCalled();
   });
+
+  it("closes the note window when clicking outside it", () => {
+    render(<FeedbackWidget />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Notiz erfassen" }));
+    expect(screen.getByText("Verbesserung notieren")).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByTestId("feedback-backdrop"));
+
+    expect(screen.queryByText("Verbesserung notieren")).not.toBeInTheDocument();
+  });
 });

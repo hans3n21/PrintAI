@@ -89,4 +89,24 @@ describe("buildPromptFromCreativeBrief", () => {
     expect(prompt).toContain("Use the attached reference image(s)");
     expect(prompt).toContain("Nutzerfoto einer getigerten Katze");
   });
+
+  it("adds a non-violent safety guide to reduce image safety false positives", () => {
+    const brief: CreativeBrief = {
+      occasion: "sonstiges",
+      product: "tshirt",
+      style: "cartoon",
+      tone: "witzig",
+      theme: "wildes Moped-Maskottchen",
+      exact_text: null,
+      must_include_visuals: ["Moped"],
+      avoid: [],
+      reference_images: [],
+      source_summary: "Ein lautes, freches Moped-Motiv.",
+    };
+
+    const prompt = buildPromptFromCreativeBrief(brief, null, []);
+
+    expect(prompt).toContain("Keep the scene non-violent");
+    expect(prompt).toContain("no weapons, blood, injury, gore, fighting, or threatening action");
+  });
 });

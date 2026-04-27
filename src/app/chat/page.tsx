@@ -6,6 +6,7 @@ import { QuickReplyButtons } from "@/components/chat/QuickReplyButtons";
 import { Header } from "@/components/layout/Header";
 import { FeedbackWidget } from "@/components/notes/FeedbackWidget";
 import { Button } from "@/components/ui/button";
+import { secondaryActionClassName } from "@/components/ui/appSurface";
 import { getQuickRepliesForAssistantReply } from "@/lib/chatQuickReplies";
 import { supabase } from "@/lib/supabase";
 import type { ChatMessage, ProductColor, ProductSelection } from "@/lib/types";
@@ -219,12 +220,12 @@ function ChatPageInner() {
       <Header />
       <div className="flex flex-1 flex-col">
         <div className="mx-auto flex w-full max-w-xl flex-1 flex-col">
-          <div className="flex justify-end border-b border-zinc-800 px-4 py-2">
+          <div className="flex justify-end border-b border-zinc-800/60 px-4 py-3">
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="text-zinc-400 hover:text-white"
+              className={secondaryActionClassName("h-9 px-3 text-xs")}
               onClick={() => void handleSkipOnboarding()}
               disabled={loading || skipLoading}
             >
@@ -271,7 +272,7 @@ function ChatPageInner() {
             <div ref={bottomRef} />
           </div>
 
-          <div className="border-t border-zinc-800">
+          <div className="border-t border-zinc-800/60 bg-zinc-950/40">
             <div className="p-4">
               <PromptComposer
                 onSend={(text, options) => void sendMessage(text, undefined, options)}

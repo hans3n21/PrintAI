@@ -1,5 +1,6 @@
 import { generateDesigns } from "@/lib/agents/generate";
 import { buildPromptFromCreativeBrief } from "@/lib/agents/promptBuilder";
+import { getGenerateErrorResponse } from "@/lib/generateErrors";
 import { getPrintPromptTemplate } from "@/lib/prompts/templates";
 import { supabaseAdmin } from "@/lib/supabase";
 import type {
@@ -49,6 +50,9 @@ function buildFinalImagePrompt(promptData: {
   if (promptData.negative_prompt?.trim()) {
     parts.push(`Avoid: ${promptData.negative_prompt.trim()}`);
   }
+  parts.push(
+    "Safety guide: Keep the scene non-violent and playful; no weapons, blood, injury, gore, fighting, or threatening action."
+  );
   return parts.join("\n");
 }
 
@@ -117,6 +121,7 @@ export async function POST(request: Request) {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[POST /api/generate]", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const response = getGenerateErrorResponse(e);
+    return NextResponse.json(response.body, { status: response.status });
   }
 }

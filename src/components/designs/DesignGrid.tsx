@@ -44,10 +44,10 @@ export function DesignGrid({
           key={url}
           onClick={() => onSelect(url)}
           className={cn(
-            "group relative aspect-square overflow-hidden rounded-2xl border-2 transition-all",
+            "group relative aspect-square overflow-hidden rounded-[1.75rem] border transition-all shadow-lg shadow-black/20",
             selectedUrl === url
               ? "border-violet-500 ring-2 ring-violet-500/30"
-              : "border-zinc-700 hover:border-zinc-500"
+              : "border-zinc-700/70 hover:-translate-y-0.5 hover:border-zinc-500"
           )}
         >
           <div
@@ -63,8 +63,8 @@ export function DesignGrid({
             />
           </div>
           {selectedUrl === url && (
-            <div className="absolute bottom-0 right-0 flex items-center justify-center bg-violet-600/20">
-              <div className="rounded-full bg-violet-500 p-1 text-white">✓</div>
+            <div className="absolute bottom-3 right-3 flex items-center justify-center rounded-full border border-violet-300/40 bg-violet-600/80 p-1 text-white shadow-lg shadow-violet-950/30 backdrop-blur">
+              <div className="text-sm leading-none">✓</div>
             </div>
           )}
         </button>

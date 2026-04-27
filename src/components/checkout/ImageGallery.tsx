@@ -1,7 +1,10 @@
 "use client";
 
+import { ImageLightbox, type LightboxItem } from "@/components/gallery/ImageLightbox";
+import { AppSurface } from "@/components/ui/appSurface";
 import type { ReferenceImageAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 type ImageGalleryProps = {
   designUrls: string[];
@@ -10,7 +13,7 @@ type ImageGalleryProps = {
   title?: string;
 };
 
-type GalleryItem = {
+type GalleryItem = LightboxItem & {
   url: string;
   label: string;
   kind: "design" | "reference";
@@ -23,6 +26,7 @@ export function ImageGallery({
   referenceImages = [],
   title = "Deine Galerie",
 }: ImageGalleryProps) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const items: GalleryItem[] = [
     ...designUrls.map((url, index) => ({
       url,
@@ -41,7 +45,7 @@ export function ImageGallery({
   if (items.length === 0) return null;
 
   return (
-    <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+    <AppSurface className="space-y-4">
       <div>
         <h3 className="text-base font-semibold text-white">{title}</h3>
         <p className="text-sm text-zinc-500">
@@ -49,12 +53,15 @@ export function ImageGallery({
         </p>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {items.map((item) => (
+        {items.map((item, index) => (
           <figure key={`${item.kind}-${item.url}`} className="space-y-2">
-            <div
+            <button
+              type="button"
+              aria-label={`${item.label} öffnen`}
+              onClick={() => setActiveIndex(index)}
               className={cn(
-                "relative aspect-square overflow-hidden rounded-xl border bg-zinc-950",
-                item.selected ? "border-violet-500" : "border-zinc-800"
+                "relative aspect-square w-full overflow-hidden rounded-2xl border bg-zinc-950/70 text-left shadow-sm shadow-black/30 transition hover:-translate-y-0.5 hover:border-violet-500/80",
+                item.selected ? "border-violet-500 ring-2 ring-violet-500/25" : "border-zinc-700/70"
               )}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -62,11 +69,19 @@ export function ImageGallery({
               <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-200">
                 {item.kind === "design" ? "Design" : "Upload"}
               </span>
-            </div>
+            </button>
             <figcaption className="line-clamp-2 text-xs text-zinc-400">{item.label}</figcaption>
           </figure>
         ))}
       </div>
-    </section>
+      {activeIndex !== null && (
+        <ImageLightbox
+          items={items}
+          activeIndex={activeIndex}
+          onSelect={setActiveIndex}
+          onClose={() => setActiveIndex(null)}
+        />
+      )}
+    </AppSurface>
   );
 }

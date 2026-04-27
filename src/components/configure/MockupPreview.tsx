@@ -32,9 +32,9 @@ export function MockupPreview({
           : "T-Shirt";
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-3 rounded-[2rem] border border-zinc-700/70 bg-zinc-800/80 p-5 shadow-2xl shadow-black/25 ring-1 ring-white/5 backdrop-blur">
       <div
-        className="relative flex h-64 w-52 items-center justify-center rounded-xl shadow-xl"
+        className="relative flex h-64 w-52 items-center justify-center rounded-[1.75rem] shadow-2xl shadow-black/30 ring-1 ring-white/10"
         style={{ backgroundColor: bgColor }}
       >
         <div className="absolute inset-0 flex items-center justify-center">
@@ -47,7 +47,7 @@ export function MockupPreview({
         </div>
 
         {designUrl && (printArea === "front" || printArea === "both") && (
-          <div className="relative z-10 h-32 w-32 overflow-hidden rounded-lg">
+          <div className="relative z-10 h-32 w-32 overflow-hidden rounded-2xl bg-black/10 shadow-lg shadow-black/20">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={designUrl} alt="Design preview" className="h-full w-full object-contain" />
           </div>
@@ -60,7 +60,7 @@ export function MockupPreview({
         )}
       </div>
 
-      <p className="text-xs text-zinc-500">
+      <p className="rounded-full border border-zinc-700/70 bg-zinc-950/40 px-3 py-1 text-xs text-zinc-500">
         {productLabel} ·{" "}
         {printArea === "front"
           ? "Vorderseite"

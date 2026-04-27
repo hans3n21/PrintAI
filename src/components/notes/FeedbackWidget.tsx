@@ -105,7 +105,7 @@ export function FeedbackWidget({
         aria-label="Notiz erfassen"
         data-feedback-screenshot-ignore
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-100 shadow-lg transition hover:border-violet-500 hover:bg-zinc-800"
+        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-zinc-700/80 bg-zinc-900/90 px-4 py-2 text-sm text-zinc-100 shadow-lg shadow-black/30 backdrop-blur transition hover:-translate-y-0.5 hover:border-violet-500 hover:bg-zinc-800"
       >
         <NotebookPen className="h-4 w-4" />
         Notiz
@@ -114,28 +114,37 @@ export function FeedbackWidget({
       {open && (
         <div
           data-feedback-screenshot-ignore
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 md:items-center"
+          data-testid="feedback-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm md:items-center"
         >
-          <div className="w-full max-w-lg rounded-2xl border border-zinc-700 bg-zinc-900 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-white">Verbesserung notieren</h3>
+          <div className="w-full max-w-lg rounded-[2rem] border border-zinc-700/80 bg-zinc-800/90 p-5 shadow-2xl shadow-black/40 ring-1 ring-white/5">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-white">Verbesserung notieren</h3>
+                <p className="mt-1 text-xs text-zinc-500">Kurze Notiz mit Seitenkontext speichern.</p>
+              </div>
               <button
                 aria-label="Schließen"
                 onClick={() => setOpen(false)}
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                className="rounded-full border border-zinc-700/80 bg-zinc-900/80 p-2 text-zinc-400 shadow-sm shadow-black/30 transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <p className="mb-2 text-xs text-zinc-500">Seite: {pagePath}</p>
+            <p className="mb-3 rounded-full border border-zinc-700/60 bg-zinc-950/40 px-3 py-1 text-xs text-zinc-500">
+              Seite: {pagePath}
+            </p>
 
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Was sollte verbessert werden?"
               rows={4}
-              className="resize-none border-zinc-700 bg-zinc-950 text-zinc-100"
+              className="resize-none rounded-2xl border-zinc-700/80 bg-zinc-950/60 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus-visible:border-violet-500 focus-visible:ring-violet-500/20"
             />
 
             <label className="mt-3 block space-y-2">
@@ -143,7 +152,7 @@ export function FeedbackWidget({
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as FeedbackCategory)}
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                className="w-full rounded-2xl border border-zinc-700/80 bg-zinc-950/60 px-4 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-violet-500"
               >
                 {FEEDBACK_CATEGORIES.map((item) => (
                   <option key={item} value={item}>
@@ -158,7 +167,7 @@ export function FeedbackWidget({
                 type="button"
                 variant="outline"
                 onClick={() => void captureScreenshot()}
-                className="border-zinc-700 text-zinc-200"
+                className="rounded-full border-zinc-700/80 bg-zinc-900/70 text-zinc-200 shadow-sm shadow-black/20 hover:bg-zinc-800"
               >
                 <Camera className="mr-2 h-4 w-4" />
                 Screenshot der aktuellen Seite
@@ -174,7 +183,7 @@ export function FeedbackWidget({
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                className="border-zinc-700 text-zinc-300"
+                className="rounded-full border-zinc-700/80 bg-zinc-900/70 text-zinc-300 hover:bg-zinc-800"
               >
                 Schließen
               </Button>
@@ -182,7 +191,7 @@ export function FeedbackWidget({
                 type="button"
                 onClick={() => void saveNote()}
                 disabled={!note.trim() || saving}
-                className="bg-violet-600 hover:bg-violet-700"
+                className="rounded-full bg-violet-600 shadow-lg shadow-violet-950/40 hover:bg-violet-700 disabled:opacity-40"
               >
                 {saving ? (
                   <>

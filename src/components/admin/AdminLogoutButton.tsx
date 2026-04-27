@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { secondaryActionClassName } from "@/components/ui/appSurface";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -21,7 +22,7 @@ export function AdminLogoutButton() {
       variant="outline"
       onClick={() => void logout()}
       disabled={loading}
-      className="border-zinc-700 text-zinc-300"
+      className={secondaryActionClassName()}
     >
       {loading ? "..." : "Logout"}
     </Button>
