@@ -217,7 +217,23 @@ function ChatPageInner() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <Header
+        rightSlot={
+          <FeedbackWidget
+            triggerVariant="header"
+            sessionId={sessionId}
+            targetType="chat_session"
+            targetRef={lastAssistant ? `assistant:${lastAssistant.index}` : undefined}
+            assistantOutput={lastAssistant?.content}
+            conversationSnapshot={messages}
+            clientState={{
+              pendingImage: Boolean(pendingImage),
+              loading,
+              skipLoading,
+            }}
+          />
+        }
+      />
       <div className="flex flex-1 flex-col">
         <div className="mx-auto flex w-full max-w-xl flex-1 flex-col">
           <div className="flex justify-end border-b border-zinc-800/60 px-4 py-3">
@@ -289,18 +305,6 @@ function ChatPageInner() {
           </div>
         </div>
       </div>
-      <FeedbackWidget
-        sessionId={sessionId}
-        targetType="chat_session"
-        targetRef={lastAssistant ? `assistant:${lastAssistant.index}` : undefined}
-        assistantOutput={lastAssistant?.content}
-        conversationSnapshot={messages}
-        clientState={{
-          pendingImage: Boolean(pendingImage),
-          loading,
-          skipLoading,
-        }}
-      />
     </div>
   );
 }

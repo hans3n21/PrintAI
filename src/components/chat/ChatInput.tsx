@@ -26,13 +26,17 @@ type SpeechRecognitionEventLike = {
   };
 };
 
+type SpeechRecognitionErrorLike = {
+  error?: string;
+};
+
 type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
   start: () => void;
   stop: () => void;
 };

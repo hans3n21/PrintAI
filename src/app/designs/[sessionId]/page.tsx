@@ -157,7 +157,23 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <Header
+        rightSlot={
+          <FeedbackWidget
+            triggerVariant="header"
+            sessionId={sessionId}
+            targetType={selectedDesign ? "design" : "generation"}
+            targetRef={selectedDesign ?? sessionId}
+            conversationSnapshot={conversation}
+            designUrlsSnapshot={designs}
+            clientState={{
+              selectedDesignUrl: selectedDesign,
+              selectedSlogan: selectedSlogan !== null ? slogans[selectedSlogan] : null,
+              loading: loading || regenerating,
+            }}
+          />
+        }
+      />
       <main>
         <PageShell>
         {!isWaitingForGeneration && !generationError && (
@@ -232,18 +248,6 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
         )}
         </PageShell>
       </main>
-      <FeedbackWidget
-        sessionId={sessionId}
-        targetType={selectedDesign ? "design" : "generation"}
-        targetRef={selectedDesign ?? sessionId}
-        conversationSnapshot={conversation}
-        designUrlsSnapshot={designs}
-        clientState={{
-          selectedDesignUrl: selectedDesign,
-          selectedSlogan: selectedSlogan !== null ? slogans[selectedSlogan] : null,
-          loading: loading || regenerating,
-        }}
-      />
     </div>
   );
 }

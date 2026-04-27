@@ -2,6 +2,7 @@
 
 import { ImageGallery } from "@/components/checkout/ImageGallery";
 import { Header } from "@/components/layout/Header";
+import { FeedbackWidget } from "@/components/notes/FeedbackWidget";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,7 +71,18 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
   if (ordered) {
     return (
       <div className="flex min-h-screen flex-col">
-        <Header />
+        <Header
+          rightSlot={
+            <FeedbackWidget
+              triggerVariant="header"
+              sessionId={sessionId}
+              targetType="page"
+              targetRef={`checkout-complete:${sessionId}`}
+              designUrlsSnapshot={designUrls}
+              clientState={{ ordered, orderId }}
+            />
+          }
+        />
         <main className="flex flex-1 flex-col items-center justify-center p-4 text-center">
           <AppSurface className="flex w-full max-w-xl flex-col items-center gap-6">
           <div className="flex h-20 w-20 items-center justify-center rounded-full border border-green-500/30 bg-green-500/15 shadow-lg shadow-green-950/20">
@@ -104,7 +116,23 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <Header
+        rightSlot={
+          <FeedbackWidget
+            triggerVariant="header"
+            sessionId={sessionId}
+            targetType="page"
+            targetRef={`checkout:${sessionId}`}
+            designUrlsSnapshot={designUrls}
+            clientState={{
+              designUrl,
+              config,
+              gallerySaved,
+              loading,
+            }}
+          />
+        }
+      />
       <main>
       <PageShell>
         <PageTitle

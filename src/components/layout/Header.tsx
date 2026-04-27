@@ -1,6 +1,7 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
-export function Header() {
+export function Header({ rightSlot }: { rightSlot?: ReactNode }) {
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-800/70 bg-zinc-950/80 px-4 py-3 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-xl items-center justify-between">
@@ -9,6 +10,7 @@ export function Header() {
             Print<span className="text-violet-400">AI</span>
           </span>
         </Link>
+        {rightSlot}
       </div>
     </header>
   );

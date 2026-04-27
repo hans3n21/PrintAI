@@ -95,4 +95,40 @@ describe("FeedbackWidget", () => {
 
     expect(screen.queryByText("Verbesserung notieren")).not.toBeInTheDocument();
   });
+
+  it("can render a non-floating header trigger", () => {
+    render(<FeedbackWidget triggerVariant="header" />);
+
+    const trigger = screen.getByRole("button", { name: "Notiz erfassen" });
+    expect(trigger).not.toHaveClass("fixed");
+    expect(trigger).not.toHaveClass("bottom-5");
+
+    fireEvent.click(trigger);
+    expect(screen.getByText("Verbesserung notieren")).toBeInTheDocument();
+  });
+
+  it("portals the note window outside a header trigger container", () => {
+    render(
+      <header data-testid="header">
+        <FeedbackWidget triggerVariant="header" />
+      </header>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Notiz erfassen" }));
+
+    const backdrop = screen.getByTestId("feedback-backdrop");
+    expect(screen.getByTestId("header")).not.toContainElement(backdrop);
+    expect(backdrop.parentElement).toBe(document.body);
+  });
+
+  it("uses a full-width mobile sheet layout for the note window", () => {
+    render(<FeedbackWidget />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Notiz erfassen" }));
+
+    const panel = screen.getByText("Verbesserung notieren").closest("[data-feedback-panel]");
+    expect(panel).toHaveClass("w-full");
+    expect(panel).toHaveClass("rounded-b-none");
+    expect(screen.getByRole("button", { name: /Screenshot der aktuellen Seite/i })).toHaveClass("w-full");
+  });
 });

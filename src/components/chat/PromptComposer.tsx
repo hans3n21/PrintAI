@@ -46,13 +46,17 @@ type SpeechRecognitionEventLike = {
   };
 };
 
+type SpeechRecognitionErrorLike = {
+  error?: string;
+};
+
 type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
   start: () => void;
   stop: () => void;
 };
@@ -83,6 +87,19 @@ function VoiceWaveform() {
   );
 }
 
+function getVoiceErrorMessage(error?: string) {
+  if (error === "not-allowed" || error === "service-not-allowed") {
+    return "Mikrofonzugriff wurde blockiert. Bitte erlaube das Mikrofon im Browser oder nutze die Diktierfunktion deiner Handy-Tastatur.";
+  }
+  if (error === "no-speech") {
+    return "Ich habe keine Sprache erkannt. Tippe erneut auf das Mikrofon oder nutze die Diktierfunktion deiner Tastatur.";
+  }
+  if (error === "audio-capture") {
+    return "Kein Mikrofon gefunden. Prüfe die Mikrofonfreigabe oder nutze die Tastatur-Diktierfunktion.";
+  }
+  return "Spracheingabe ist auf diesem Gerät gerade nicht verfügbar. Nutze alternativ die Diktierfunktion deiner Handy-Tastatur.";
+}
+
 export function PromptComposer({
   onSend,
   disabled = false,
@@ -98,8 +115,10 @@ export function PromptComposer({
   const [showColors, setShowColors] = useState(false);
   const [listening, setListening] = useState(false);
   const [voicePreview, setVoicePreview] = useState("");
+  const [voiceNotice, setVoiceNotice] = useState("");
   const [cameraCapability, setCameraCapability] =
     useState<CameraCapability>("unknown");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const selfieInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -129,16 +148,19 @@ export function PromptComposer({
 
   const startVoiceInput = () => {
     if (disabled || loading || listening) return;
+    setVoiceNotice("");
     const SpeechRecognition =
       window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setValue((prev) =>
-        prev || "Spracheingabe wird von diesem Browser nicht unterstützt."
+      setVoiceNotice(
+        "Spracheingabe wird von diesem Browser nicht unterstützt. Nutze alternativ die Diktierfunktion deiner Handy-Tastatur."
       );
+      textareaRef.current?.focus();
       return;
     }
 
     let finalTranscript = "";
+    let hadRecognitionError = false;
     const recognition = new SpeechRecognition();
     recognition.lang = "de-DE";
     recognition.continuous = false;
@@ -152,20 +174,36 @@ export function PromptComposer({
       }
       setVoicePreview((finalTranscript || interim).trim());
     };
-    recognition.onerror = () => {
+    recognition.onerror = (event) => {
+      hadRecognitionError = true;
       setListening(false);
+      setVoicePreview("");
+      setVoiceNotice(getVoiceErrorMessage(event.error));
+      recognitionRef.current = null;
     };
     recognition.onend = () => {
       const spoken = finalTranscript.trim();
       setListening(false);
       setVoicePreview("");
       recognitionRef.current = null;
+      if (hadRecognitionError) return;
       if (spoken) onSend(spoken, { isVoice: true });
+      else setVoiceNotice("Ich habe nichts verstanden. Bitte versuche es erneut oder nutze die Handy-Diktierfunktion.");
     };
     recognitionRef.current = recognition;
     setVoicePreview("");
     setListening(true);
-    recognition.start();
+    try {
+      recognition.start();
+    } catch {
+      setListening(false);
+      setVoicePreview("");
+      recognitionRef.current = null;
+      setVoiceNotice(
+        "Spracheingabe konnte nicht gestartet werden. Bitte prüfe die Mikrofonfreigabe oder nutze die Handy-Diktierfunktion."
+      );
+      textareaRef.current?.focus();
+    }
   };
 
   useEffect(() => {
@@ -193,6 +231,7 @@ export function PromptComposer({
       )}
     >
       <textarea
+        ref={textareaRef}
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={handleKeyDown}
@@ -202,13 +241,18 @@ export function PromptComposer({
         className="min-h-20 w-full resize-none bg-transparent px-1 text-base leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-400 disabled:opacity-60"
       />
 
-      {(listening || attachmentPreview) && (
+      {(listening || voiceNotice || attachmentPreview) && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-violet-200">
           {listening && (
             <>
               <VoiceWaveform />
               <span className="max-w-52 truncate">{voicePreview || "Sprich jetzt..."}</span>
             </>
+          )}
+          {voiceNotice && (
+            <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-yellow-200">
+              {voiceNotice}
+            </div>
           )}
           {attachmentPreview && (
             <div className="flex items-center gap-2 rounded-full border border-violet-500/40 bg-violet-500/10 py-1 pl-1 pr-2">

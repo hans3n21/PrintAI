@@ -4,6 +4,7 @@ import { ColorPicker } from "@/components/configure/ColorPicker";
 import { MockupPreview } from "@/components/configure/MockupPreview";
 import { TextEditor } from "@/components/configure/TextEditor";
 import { Header } from "@/components/layout/Header";
+import { FeedbackWidget } from "@/components/notes/FeedbackWidget";
 import { Button } from "@/components/ui/button";
 import {
   AppSurface,
@@ -84,7 +85,23 @@ export default function ConfigurePage({ params }: { params: Promise<{ sessionId:
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <Header
+        rightSlot={
+          <FeedbackWidget
+            triggerVariant="header"
+            sessionId={sessionId}
+            targetType="page"
+            targetRef={`configure:${sessionId}`}
+            clientState={{
+              designUrl,
+              product,
+              color,
+              printArea,
+              quantity,
+            }}
+          />
+        }
+      />
       <main>
         <PageShell>
         <PageTitle
