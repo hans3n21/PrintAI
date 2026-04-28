@@ -15,6 +15,10 @@ const CREATIVE_BRIEF_SYSTEM_PROMPT = `You create production creative briefs for 
 
 Use the full chat history. Do not discard concrete user motifs, hobbies, animals, seasons, vehicles, locations, or inside jokes.
 
+For any team or club shirt, preserve layout wishes such as logo, sponsor, player name,
+number, front/back placement, chest/back placement, or "vorne/hinten" wording inside
+must_include_visuals and source_summary. These are production/editor hints; do not invent a fixed editor schema and do not ask for data that was not provided.
+
 Return ONLY JSON with this shape:
 {
   "occasion": "geburtstag | jga | abi | verein | firma | hochzeit | sonstiges",

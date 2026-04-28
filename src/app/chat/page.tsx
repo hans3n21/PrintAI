@@ -13,6 +13,7 @@ import type { ChatMessage, ProductColor, ProductSelection } from "@/lib/types";
 import { Loader2, Sparkles, SkipForward } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import { mergeLoadedConversation } from "./conversationHydration";
 
 function ChatPageInner() {
   const searchParams = useSearchParams();
@@ -196,8 +197,10 @@ function ChatPageInner() {
         .select("conversation_history, product_selection")
         .eq("id", sessionId)
         .single();
-      if (!cancelled && data?.conversation_history) {
-        setMessages(data.conversation_history as ChatMessage[]);
+      if (!cancelled) {
+        setMessages((prev) =>
+          mergeLoadedConversation(prev, data?.conversation_history as ChatMessage[] | null)
+        );
       }
       if (!cancelled && data?.product_selection) {
         setProductSelection(data.product_selection as ProductSelection);

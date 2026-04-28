@@ -109,4 +109,37 @@ describe("buildPromptFromCreativeBrief", () => {
     expect(prompt).toContain("Keep the scene non-violent");
     expect(prompt).toContain("no weapons, blood, injury, gore, fighting, or threatening action");
   });
+
+  it("keeps team shirt placement notes visible for future editor workflows", () => {
+    const brief: CreativeBrief = {
+      occasion: "verein",
+      product: "tshirt",
+      style: "modern",
+      tone: "ernst",
+      theme: "Vereinsshirt fürs ganze Team",
+      exact_text: null,
+      must_include_visuals: [
+        "Logo vorne",
+        "Sponsor unter dem Logo",
+        "Name hinten",
+        "Nummer auf der Rückseite",
+      ],
+      avoid: [],
+      reference_images: [],
+      source_summary:
+        "Teamshirt: Logo vorne, Sponsor darunter, Name hinten und Nummer auf der Rückseite.",
+    };
+    const selection: ProductSelection = {
+      product: "tshirt",
+      product_color: "navy",
+      quantity: 15,
+    };
+
+    const prompt = buildPromptFromCreativeBrief(brief, selection, []);
+
+    expect(prompt).toContain("Preserve placement intent");
+    expect(prompt).toContain("front/back");
+    expect(prompt).toContain("Logo vorne");
+    expect(prompt).toContain("Nummer auf der Rückseite");
+  });
 });

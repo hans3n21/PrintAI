@@ -73,6 +73,45 @@ describe("runOnboardingMessage globhanes", () => {
     expect(call.temperature).toBeLessThanOrEqual(0.3);
   });
 
+  it("includes concrete examples forbidding date and slogan follow-up when required fields are known", async () => {
+    vi.mocked(openai.chat.completions.create).mockResolvedValueOnce({
+      choices: [{ message: { content: "Alles klar!" } }],
+    } as never);
+
+    await runOnboardingMessage(
+      [],
+      "JGA-Shirt, Mallorca, Cartoon-Style",
+      { productSelection }
+    );
+
+    const call = vi.mocked(openai.chat.completions.create).mock.calls[0][0];
+    const system = call.messages?.[0];
+    const content = typeof system?.content === "string" ? system.content : "";
+
+    expect(content).toContain('FALSCH: "Wann ist der JGA?"');
+    expect(content).toContain('FALSCH: "Gibt es einen speziellen Text oder Slogan?"');
+    expect(content).toContain("text_custom immer null");
+  });
+
+  it("allows neutral shirt requests to default to sonstiges instead of asking for an occasion", async () => {
+    vi.mocked(openai.chat.completions.create).mockResolvedValueOnce({
+      choices: [{ message: { content: "Alles klar!" } }],
+    } as never);
+
+    await runOnboardingMessage(
+      [],
+      "Ich brauche ein schwarzes Shirt mit einem coolen Fuchs im Cartoonstyle",
+      { productSelection }
+    );
+
+    const call = vi.mocked(openai.chat.completions.create).mock.calls[0][0];
+    const system = call.messages?.[0];
+    const content = typeof system?.content === "string" ? system.content : "";
+
+    expect(content).toContain("Bei neutralen Shirt-Wuenschen ist event_type sonstiges");
+    expect(content).toContain('FALSCH: "Für welchen Anlass ist das Shirt?"');
+  });
+
   it("treats prose-wrapped onboarding data as complete instead of leaking it to chat", async () => {
     vi.mocked(openai.chat.completions.create).mockResolvedValueOnce({
       choices: [

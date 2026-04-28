@@ -78,4 +78,62 @@ describe("buildCreativeBrief", () => {
       expect.arrayContaining(["Mopeds", "Schweine", "Sommer"])
     );
   });
+
+  it("instructs the model to preserve team shirt layout wishes without requiring a fixed data model", async () => {
+    const history: ChatMessage[] = [
+      {
+        role: "user",
+        content:
+          "Ich bin im Verein und möchte fürs ganze Team Shirts. Logo vorne, Sponsor drunter, Name hinten und Nummer auf die Rückseite.",
+      },
+    ];
+    vi.mocked(openai.chat.completions.create).mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              occasion: "verein",
+              product: "tshirt",
+              style: "modern",
+              tone: "ernst",
+              theme: "Teamshirt für den Verein",
+              exact_text: null,
+              must_include_visuals: [
+                "Vereinslogo vorne",
+                "Sponsor unter dem Logo",
+                "Name hinten",
+                "Rückennummer",
+              ],
+              avoid: [],
+              reference_images: [],
+              source_summary:
+                "Vereinsshirt fürs ganze Team mit Logo vorne, Sponsor darunter, Name hinten und Nummer auf der Rückseite.",
+            }),
+          },
+        },
+      ],
+    } as never);
+
+    const brief = await buildCreativeBrief(
+      history,
+      { ...onboardingData, event_type: "verein", group: true, group_size: 12, text_custom: null },
+      { ...productSelection, quantity: 12 },
+      []
+    );
+    const call = vi.mocked(openai.chat.completions.create).mock.calls[0][0];
+    const system = call.messages?.[0];
+    const content = typeof system?.content === "string" ? system.content : "";
+
+    expect(content).toContain("team or club shirt");
+    expect(content).toContain("front/back placement");
+    expect(content).toContain("do not invent a fixed editor schema");
+    expect(brief.must_include_visuals).toEqual(
+      expect.arrayContaining([
+        "Vereinslogo vorne",
+        "Sponsor unter dem Logo",
+        "Name hinten",
+        "Rückennummer",
+      ])
+    );
+  });
 });

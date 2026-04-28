@@ -38,6 +38,11 @@ export function buildPromptFromCreativeBrief(
       `MUST include these visual elements as recognizable parts of the motif: ${brief.must_include_visuals.join(", ")}.`
     );
   }
+  if (hasPlacementIntent(brief)) {
+    parts.push(
+      "Preserve placement intent for future editor workflows: keep front/back, chest/back, logo, sponsor, name, and number instructions visible instead of flattening them into generic decoration."
+    );
+  }
   if (brief.exact_text?.trim()) {
     parts.push(
       `IMPORTANT: Include exactly this readable text in the design: "${brief.exact_text.trim()}".`
@@ -72,6 +77,21 @@ export function buildPromptFromCreativeBrief(
   );
 
   return parts.join("\n");
+}
+
+function hasPlacementIntent(brief: CreativeBrief): boolean {
+  const text = [
+    brief.source_summary,
+    brief.theme,
+    brief.exact_text ?? "",
+    ...brief.must_include_visuals,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return /front|back|vorne|hinten|rückseite|rueckseite|brust|logo|sponsor|nummer|name/.test(
+    text
+  );
 }
 
 export async function buildImagePrompt(
