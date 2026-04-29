@@ -148,7 +148,7 @@ async function finalizeOnboarding(
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
     const sessionId = body.sessionId as string | undefined;
     const message = typeof body.message === "string" ? body.message : "";
     const imageBase64List = Array.isArray(body.imageBase64List)
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
       : [];
     const imageBase64 =
       typeof body.imageBase64 === "string" ? body.imageBase64 : undefined;
-    const incomingImages =
+    const incomingImages: string[] =
       imageBase64List.length > 0
         ? imageBase64List.slice(0, 5)
         : imageBase64?.trim()

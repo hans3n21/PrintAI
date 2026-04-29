@@ -107,8 +107,8 @@ function getAdminPreviewClickZoomScale(
     return ADMIN_DESIGN_PREVIEW_MIN_CLICK_ZOOM_SCALE;
   }
 
-  const naturalWidth = previewImageElement.naturalWidth;
-  const naturalHeight = previewImageElement.naturalHeight;
+  const naturalWidth = previewImageElement?.naturalWidth ?? 0;
+  const naturalHeight = previewImageElement?.naturalHeight ?? 0;
   if (naturalWidth > 0 && naturalHeight > 0) {
     const imageRatio = naturalWidth / naturalHeight;
     const frameRatio = frameBounds.width / frameBounds.height;
