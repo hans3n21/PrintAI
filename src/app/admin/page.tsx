@@ -1,5 +1,5 @@
 import { AdminLogoutButton } from "@/components/admin/AdminLogoutButton";
-import { NotesFeed } from "@/components/notes/NotesFeed";
+import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { PageTitle } from "@/components/ui/appSurface";
 
 export default function AdminPage() {
@@ -14,7 +14,7 @@ export default function AdminPage() {
         <AdminLogoutButton />
       </header>
 
-      <NotesFeed />
+      <AdminDashboard />
     </main>
   );
 }
