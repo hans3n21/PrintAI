@@ -136,4 +136,56 @@ describe("buildCreativeBrief", () => {
       ])
     );
   });
+
+  it("recovers concrete user scene actions instead of reducing them to object motifs", async () => {
+    const history: ChatMessage[] = [
+      {
+        role: "user",
+        content:
+          "Mach ein Motiv, wo zwei Leute einen Brokkoli jagen. Dazu die Einweihung des chinesischen Klappstuhls im Aquarell-Stil.",
+      },
+      { role: "assistant", content: "Alles klar." },
+      { role: "user", content: "Genau, die beiden sollen den Brokkoli jagen." },
+    ];
+    vi.mocked(openai.chat.completions.create).mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              occasion: "sonstiges",
+              product: "tshirt",
+              style: "sonstiges",
+              tone: "witzig",
+              theme: "Aquarell-Brokkoli mit Klappstuhl",
+              exact_text: "Einweihung des chinesischen Klappstuhls",
+              must_include_visuals: ["Brokkoli", "chinesischer Klappstuhl"],
+              avoid: [],
+              reference_images: [],
+              source_summary:
+                "Aquarell-Shirt zur Einweihung des chinesischen Klappstuhls mit Brokkoli-Motiv.",
+            }),
+          },
+        },
+      ],
+    } as never);
+
+    const brief = await buildCreativeBrief(
+      history,
+      { ...onboardingData, event_type: "sonstiges", style: "sonstiges" },
+      productSelection,
+      []
+    );
+    const call = vi.mocked(openai.chat.completions.create).mock.calls[0][0];
+    const system = call.messages?.[0];
+    const content = typeof system?.content === "string" ? system.content : "";
+
+    expect(content).toContain("concrete actions");
+    expect(content).toContain("who does what to whom");
+    expect(brief.must_include_visuals).toEqual(
+      expect.arrayContaining([
+        "Zwei Leute einen Brokkoli jagen",
+        "Die beiden sollen den Brokkoli jagen",
+      ])
+    );
+  });
 });

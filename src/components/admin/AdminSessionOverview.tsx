@@ -6,6 +6,7 @@ import {
   AppSurface,
   secondaryActionClassName,
 } from "@/components/ui/appSurface";
+import { collectDisplayDesignUrls } from "@/lib/designPageGeneration";
 import type { ChatMessage, SessionStatus } from "@/lib/types";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -63,6 +64,83 @@ const lightboxTabs: Array<{ id: LightboxTab; label: string }> = [
   { id: "technik", label: "Technik" },
 ];
 
+const ADMIN_REFERENCE_PREVIEW_CLICK_ZOOM_SCALE = 1.25;
+const ADMIN_DESIGN_PREVIEW_MIN_CLICK_ZOOM_SCALE = 1.35;
+const ADMIN_PREVIEW_MAX_ZOOM_SCALE = 2;
+const ADMIN_PREVIEW_WHEEL_ZOOM_STEP = 0.1;
+
+function clampAdminPreviewZoomScale(scale: number) {
+  return Math.min(ADMIN_PREVIEW_MAX_ZOOM_SCALE, Math.max(1, Number(scale.toFixed(2))));
+}
+
+function clampAdminPreviewPanOffset(
+  offset: { x: number; y: number },
+  scale: number,
+  previewFrameElement: HTMLElement
+) {
+  const bounds = previewFrameElement.getBoundingClientRect();
+  if (bounds.width <= 0 || bounds.height <= 0) return offset;
+  const maxX = (bounds.width * (scale - 1)) / 2;
+  const maxY = (bounds.height * (scale - 1)) / 2;
+  return {
+    x: Number(Math.min(maxX, Math.max(-maxX, offset.x)).toFixed(2)),
+    y: Number(Math.min(maxY, Math.max(-maxY, offset.y)).toFixed(2)),
+  };
+}
+
+function getAdminPreviewClickZoomScale(
+  item: MediaItem,
+  previewFrameElement: HTMLElement,
+  previewImageElement: HTMLImageElement | null
+) {
+  if (item.kind !== "design") return ADMIN_REFERENCE_PREVIEW_CLICK_ZOOM_SCALE;
+
+  const frameBounds = previewFrameElement.getBoundingClientRect();
+  const imageBounds = previewImageElement?.getBoundingClientRect();
+  if (
+    !imageBounds ||
+    frameBounds.width <= 0 ||
+    frameBounds.height <= 0 ||
+    imageBounds.width <= 0 ||
+    imageBounds.height <= 0
+  ) {
+    return ADMIN_DESIGN_PREVIEW_MIN_CLICK_ZOOM_SCALE;
+  }
+
+  const naturalWidth = previewImageElement.naturalWidth;
+  const naturalHeight = previewImageElement.naturalHeight;
+  if (naturalWidth > 0 && naturalHeight > 0) {
+    const imageRatio = naturalWidth / naturalHeight;
+    const frameRatio = frameBounds.width / frameBounds.height;
+    const containedBounds =
+      imageRatio > frameRatio
+        ? {
+            width: frameBounds.width,
+            height: frameBounds.width / imageRatio,
+          }
+        : {
+            width: frameBounds.height * imageRatio,
+            height: frameBounds.height,
+          };
+
+    return clampAdminPreviewZoomScale(
+      Math.max(
+        ADMIN_DESIGN_PREVIEW_MIN_CLICK_ZOOM_SCALE,
+        frameBounds.width / containedBounds.width,
+        frameBounds.height / containedBounds.height
+      )
+    );
+  }
+
+  return clampAdminPreviewZoomScale(
+    Math.max(
+      ADMIN_DESIGN_PREVIEW_MIN_CLICK_ZOOM_SCALE,
+      frameBounds.width / imageBounds.width,
+      frameBounds.height / imageBounds.height
+    )
+  );
+}
+
 const statusLabels: Record<SessionStatus, string> = {
   onboarding: "Onboarding",
   generating: "Generiert",
@@ -109,7 +187,8 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
 }
 
 function buildMediaItems(detail: AdminSessionDetail): MediaItem[] {
-  const designs = detail.design_urls.map((url, index) => ({
+  const designUrls = collectDisplayDesignUrls(detail);
+  const designs = designUrls.map((url, index) => ({
     url,
     label: `Design ${index + 1}`,
     description: `${detail.summary} · generiertes Design ${index + 1}`,
@@ -149,8 +228,24 @@ function MediaLightbox({
   onClose: () => void;
 }) {
   const touchStartX = useRef<number | null>(null);
+  const previewImageRef = useRef<HTMLImageElement | null>(null);
+  const previewDragRef = useRef<{
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    moved: boolean;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<LightboxTab>("chat");
+  const [previewZoomScale, setPreviewZoomScale] = useState(1);
+  const [previewPanOffset, setPreviewPanOffset] = useState({ x: 0, y: 0 });
   const active = items[index];
+  useEffect(() => {
+    setPreviewZoomScale(1);
+    setPreviewPanOffset({ x: 0, y: 0 });
+    previewDragRef.current = null;
+  }, [active?.url]);
+
   if (!active) return null;
   const designItems = items.filter((item) => item.kind === "design");
   const referenceItems = items.filter((item) => item.kind === "reference");
@@ -166,6 +261,78 @@ function MediaLightbox({
   const previousVariant = () =>
     goToDesign((activeDesignIndex - 1 + designItems.length) % designItems.length);
   const nextVariant = () => goToDesign((activeDesignIndex + 1) % designItems.length);
+  const isPreviewZoomed = previewZoomScale > 1;
+  const togglePreviewZoom = (previewFrameElement: HTMLElement) => {
+    const drag = previewDragRef.current;
+    previewDragRef.current = null;
+    if (drag?.moved) return;
+
+    setPreviewZoomScale((current) => {
+      if (current > 1) {
+        setPreviewPanOffset({ x: 0, y: 0 });
+        return 1;
+      }
+      return getAdminPreviewClickZoomScale(
+        active,
+        previewFrameElement,
+        previewImageRef.current
+      );
+    });
+  };
+  const adjustPreviewZoomWithWheel = (
+    deltaY: number,
+    previewFrameElement: HTMLElement
+  ) => {
+    setPreviewZoomScale((current) => {
+      const next = clampAdminPreviewZoomScale(
+        current +
+          (deltaY < 0
+            ? ADMIN_PREVIEW_WHEEL_ZOOM_STEP
+            : -ADMIN_PREVIEW_WHEEL_ZOOM_STEP)
+      );
+      if (next <= 1) {
+        setPreviewPanOffset({ x: 0, y: 0 });
+        return 1;
+      }
+      setPreviewPanOffset((currentOffset) =>
+        clampAdminPreviewPanOffset(currentOffset, next, previewFrameElement)
+      );
+      return next;
+    });
+  };
+  const startPreviewDrag = (clientX: number, clientY: number) => {
+    if (!isPreviewZoomed) return;
+    previewDragRef.current = {
+      startX: clientX,
+      startY: clientY,
+      originX: previewPanOffset.x,
+      originY: previewPanOffset.y,
+      moved: false,
+    };
+  };
+  const updatePreviewDrag = (
+    clientX: number,
+    clientY: number,
+    boundsElement: HTMLElement
+  ) => {
+    const drag = previewDragRef.current;
+    if (!drag) return;
+    const dx = clientX - drag.startX;
+    const dy = clientY - drag.startY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+      drag.moved = true;
+    }
+    setPreviewPanOffset(
+      clampAdminPreviewPanOffset(
+        {
+          x: drag.originX + dx,
+          y: drag.originY + dy,
+        },
+        previewZoomScale,
+        boundsElement
+      )
+    );
+  };
 
   const dialog = (
     <div
@@ -239,24 +406,55 @@ function MediaLightbox({
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-wide text-violet-300">
               Generiertes Design {designPosition.current} von {designPosition.total}
             </p>
-            <h3 className="text-lg font-semibold text-white">{detail.summary}</h3>
+            <h3
+              data-testid="admin-media-preview-summary"
+              title={detail.summary}
+              className="h-6 truncate text-lg font-semibold leading-6 text-white"
+            >
+              {detail.summary}
+            </h3>
           </div>
         </div>
 
         <div className="mt-4 grid gap-4 lg:h-[calc(100vh-11rem)] lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_26rem]">
           <div className="space-y-3 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
-            <div className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900">
+            <button
+              type="button"
+              aria-label={`Medienvorschau ${isPreviewZoomed ? "verkleinern" : "vergrößern"}`}
+              aria-pressed={isPreviewZoomed}
+              onClick={(event) => togglePreviewZoom(event.currentTarget)}
+              onWheel={(event) => {
+                event.preventDefault();
+                adjustPreviewZoomWithWheel(event.deltaY, event.currentTarget);
+              }}
+              onMouseDown={(event) => startPreviewDrag(event.clientX, event.clientY)}
+              onMouseMove={(event) =>
+                updatePreviewDrag(event.clientX, event.clientY, event.currentTarget)
+              }
+              onMouseLeave={() => {
+                previewDragRef.current = null;
+              }}
+              data-testid="admin-media-preview-frame"
+              className={`flex w-full items-center justify-center overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900 outline-none ring-violet-400/50 transition focus-visible:ring-2 ${
+                isPreviewZoomed ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"
+              }`}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                ref={previewImageRef}
                 src={active.url}
                 alt="Medienvorschau"
-                className="max-h-[48vh] w-full object-contain"
+                draggable={false}
+                className="max-h-[48vh] w-full select-none object-contain transition-transform duration-300 ease-out"
+                style={{
+                  transform: `translate(${previewPanOffset.x}px, ${previewPanOffset.y}px) scale(${previewZoomScale})`,
+                }}
               />
-            </div>
+            </button>
 
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-3">
               <div className="flex items-center justify-between gap-3">
@@ -266,6 +464,9 @@ function MediaLightbox({
                   </p>
                   <p className="mt-1 text-xs text-zinc-400">
                     Wechsle direkt zwischen den gespeicherten Designvarianten.
+                  </p>
+                  <p className="mt-2 line-clamp-2 text-sm text-zinc-300">
+                    {detail.summary}
                   </p>
                 </div>
                 <p className="text-xs text-zinc-500">
@@ -651,9 +852,17 @@ export function AdminSessionOverview() {
     const detail = await loadDetails(id);
     if (!detail) return;
     const items = buildMediaItems(detail);
-    const firstDesignIndex = items.findIndex((item) => item.kind === "design");
-    if (firstDesignIndex >= 0) {
-      setLightbox({ sessionId: id, items, index: firstDesignIndex, detail });
+    const selectedDesignIndex = detail.selected_design_url
+      ? items.findIndex(
+          (item) => item.kind === "design" && item.url === detail.selected_design_url
+        )
+      : -1;
+    const initialDesignIndex =
+      selectedDesignIndex >= 0
+        ? selectedDesignIndex
+        : items.findIndex((item) => item.kind === "design");
+    if (initialDesignIndex >= 0) {
+      setLightbox({ sessionId: id, items, index: initialDesignIndex, detail });
     }
   }
 

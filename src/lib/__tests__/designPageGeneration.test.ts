@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getDesignPageGenerationState } from "../designPageGeneration";
+import {
+  collectDisplayDesignUrls,
+  getDesignPageGenerationState,
+} from "../designPageGeneration";
 
 describe("getDesignPageGenerationState", () => {
   it("requests design generation when a generating session has no design urls", () => {
@@ -22,5 +25,36 @@ describe("getDesignPageGenerationState", () => {
 
     expect(state.canShowDesigns).toBe(true);
     expect(state.shouldRequestSlogans).toBe(true);
+  });
+
+  it("collects all displayable designs from urls and structured assets", () => {
+    expect(
+      collectDisplayDesignUrls({
+        design_urls: ["https://example.com/legacy.png"],
+        design_assets: [
+          { preview_url: "https://example.com/asset-1.png" },
+          { mockup_url: "https://example.com/mockup.png" },
+          { print_url: "https://example.com/print.png" },
+          { preview_url: "https://example.com/legacy.png" },
+        ],
+      })
+    ).toEqual([
+      "https://example.com/legacy.png",
+      "https://example.com/asset-1.png",
+      "https://example.com/mockup.png",
+      "https://example.com/print.png",
+    ]);
+  });
+
+  it("allows showing designs when only structured assets exist", () => {
+    const state = getDesignPageGenerationState({
+      status: "designing",
+      design_urls: [],
+      design_assets: [{ preview_url: "https://example.com/asset-only.png" }],
+      slogans: [],
+    });
+
+    expect(state.canShowDesigns).toBe(true);
+    expect(state.shouldRequestDesigns).toBe(false);
   });
 });

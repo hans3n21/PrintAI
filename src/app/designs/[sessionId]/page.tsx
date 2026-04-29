@@ -13,7 +13,10 @@ import {
   primaryActionClassName,
   secondaryActionClassName,
 } from "@/components/ui/appSurface";
-import { getDesignPageGenerationState } from "@/lib/designPageGeneration";
+import {
+  collectDisplayDesignUrls,
+  getDesignPageGenerationState,
+} from "@/lib/designPageGeneration";
 import { getDesignVariantCount } from "@/lib/designVariantCount";
 import { saveSessionImagesToGallery } from "@/lib/savedGallery";
 import { supabase } from "@/lib/supabase";
@@ -83,7 +86,7 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
     const interval = setInterval(async () => {
       const { data } = await supabase
         .from("sessions")
-        .select("conversation_history, design_urls, slogans, reference_images, status")
+        .select("conversation_history, design_urls, design_assets, slogans, reference_images, status")
         .eq("id", sessionId)
         .single();
 
@@ -100,13 +103,14 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
       }
 
       if (generationState.canShowDesigns) {
-        setDesigns(data.design_urls ?? []);
+        const displayDesigns = collectDisplayDesignUrls(data);
+        setDesigns(displayDesigns);
         setSlogans((data.slogans ?? []) as SloganOption[]);
         setConversation((data.conversation_history ?? []) as ChatMessage[]);
         setReferenceImages((data.reference_images ?? []) as ReferenceImageAsset[]);
         saveSessionImagesToGallery({
           sessionId,
-          designUrls: data.design_urls ?? [],
+          designUrls: displayDesigns,
           referenceImages: (data.reference_images ?? []) as ReferenceImageAsset[],
         });
         setGallerySaved(true);
@@ -126,6 +130,15 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
     setSelectedDesign(null);
     requestedDesignsRef.current = true;
     setLoading(true);
+    await supabase
+      .from("sessions")
+      .update({
+        design_urls: [],
+        design_assets: [],
+        status: "generating",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", sessionId);
     await requestDesigns();
   };
 
@@ -154,6 +167,7 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
   };
 
   const isWaitingForGeneration = loading || regenerating;
+  const shownDesignCount = designs.length || designCount;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -179,8 +193,16 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
         {!isWaitingForGeneration && !generationError && (
           <PageTitle
             eyebrow="Designs"
-            title={designCount === 1 ? "Dein Vorschlag" : `Deine ${designCount} Vorschläge`}
-            description={designCount === 1 ? "So könnte dein Print aussehen" : "Wähle dein Lieblingsdesign"}
+            title={
+              shownDesignCount === 1
+                ? "Dein Vorschlag"
+                : `Deine ${shownDesignCount} Vorschläge`
+            }
+            description={
+              shownDesignCount === 1
+                ? "So könnte dein Print aussehen"
+                : "Wähle dein Lieblingsdesign"
+            }
           />
         )}
 
@@ -200,7 +222,7 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
             </Button>
           </AppNotice>
         ) : isWaitingForGeneration ? (
-          <ShirtLoadingAnimation />
+          <ShirtLoadingAnimation variantCount={designCount} />
         ) : (
           <DesignGrid
             urls={designs}

@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { secondaryActionClassName } from "@/components/ui/appSurface";
 import { getQuickRepliesForAssistantReply } from "@/lib/chatQuickReplies";
 import { supabase } from "@/lib/supabase";
-import type { ChatMessage, ProductColor, ProductSelection } from "@/lib/types";
+import type { ChatAttachment, ChatMessage, ProductColor, ProductSelection } from "@/lib/types";
 import { Loader2, Sparkles, SkipForward } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import { getAssistantMessageForChatResponse } from "./chatResponseFlow";
 import { mergeLoadedConversation } from "./conversationHydration";
 
 function ChatPageInner() {
@@ -24,7 +25,7 @@ function ChatPageInner() {
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [skipLoading, setSkipLoading] = useState(false);
-  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [productSelection, setProductSelection] = useState<ProductSelection | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -38,12 +39,12 @@ function ChatPageInner() {
 
   const sendMessage = async (
     text: string,
-    imageBase64?: string | null,
+    imageBase64List?: string[] | null,
     options?: { isVoice?: boolean }
   ) => {
     if (!sessionId || loading) return;
-    const img = imageBase64 ?? pendingImage;
-    if (!text.trim() && !img) return;
+    const images = imageBase64List ?? pendingImages;
+    if (!text.trim() && images.length === 0) return;
 
     setLoading(true);
     setQuickReplies([]);
@@ -52,8 +53,24 @@ function ChatPageInner() {
       options?.isVoice
         ? `[voice]${text.trim()}`
         : text.trim() ||
-          (img ? "(Foto als Referenz gesendet)" : "");
-    setMessages((prev) => [...prev, { role: "user", content: displayUser }]);
+          (images.length === 1
+            ? "(Foto als Referenz gesendet)"
+            : `(${images.length} Fotos als Referenz gesendet)`);
+    const optimisticAttachments: ChatAttachment[] = images.map((url, index) => ({
+      url,
+      label: `Referenzbild ${index + 1}`,
+      kind: "reference",
+    }));
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: displayUser,
+        ...(optimisticAttachments.length > 0
+          ? { attachments: optimisticAttachments }
+          : {}),
+      },
+    ]);
 
     const res = await fetch("/api/chat", {
       method: "POST",
@@ -61,7 +78,7 @@ function ChatPageInner() {
       body: JSON.stringify({
         sessionId,
         message: text,
-        ...(img ? { imageBase64: img } : {}),
+        ...(images.length > 0 ? { imageBase64List: images } : {}),
       }),
     });
 
@@ -82,24 +99,15 @@ function ChatPageInner() {
       return;
     }
 
-    setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
-    setPendingImage(null);
+    const assistantMessage = getAssistantMessageForChatResponse(data);
+    if (assistantMessage) {
+      setMessages((prev) => [...prev, assistantMessage]);
+    }
+    setPendingImages([]);
     setLoading(false);
 
     if (data.complete) {
-      void Promise.all([
-        fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId }),
-        }),
-        fetch("/api/slogans", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId }),
-        }),
-      ]);
-      setTimeout(() => router.push(`/designs/${sessionId}`), 1500);
+      router.push(`/designs/${sessionId}`);
     } else {
       setQuickReplies(getQuickRepliesForAssistantReply(String(data.reply ?? "")));
     }
@@ -140,18 +148,6 @@ function ChatPageInner() {
     setSkipLoading(false);
 
     if (data.complete) {
-      void Promise.all([
-        fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId }),
-        }),
-        fetch("/api/slogans", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId }),
-        }),
-      ]);
       setTimeout(() => router.push(`/designs/${sessionId}`), 1500);
     }
   };
@@ -181,12 +177,15 @@ function ChatPageInner() {
   useEffect(() => {
     if (!sessionId) return;
     const initial = sessionStorage.getItem(`printai_initial_${sessionId}`);
+    const initialImagesRaw = sessionStorage.getItem(`printai_initial_images_${sessionId}`);
     const initialImage = sessionStorage.getItem(`printai_initial_image_${sessionId}`);
     if (initial) {
       sessionStorage.removeItem(`printai_initial_${sessionId}`);
+      sessionStorage.removeItem(`printai_initial_images_${sessionId}`);
       sessionStorage.removeItem(`printai_initial_image_${sessionId}`);
+      const initialImages = parseInitialImages(initialImagesRaw, initialImage);
       setTimeout(() => {
-        void sendMessage(initial, initialImage);
+        void sendMessage(initial, initialImages);
       }, 0);
       return;
     }
@@ -230,7 +229,7 @@ function ChatPageInner() {
             assistantOutput={lastAssistant?.content}
             conversationSnapshot={messages}
             clientState={{
-              pendingImage: Boolean(pendingImage),
+              pendingImageCount: pendingImages.length,
               loading,
               skipLoading,
             }}
@@ -268,7 +267,12 @@ function ChatPageInner() {
             )}
 
             {messages.map((m, i) => (
-              <ChatBubble key={i} role={m.role} content={m.content} />
+              <ChatBubble
+                key={i}
+                role={m.role}
+                content={m.content}
+                attachments={m.attachments}
+              />
             ))}
 
             {loading && (
@@ -301,8 +305,8 @@ function ChatPageInner() {
                 placeholder="Antwort eingeben..."
                 selectedColor={selectedColor}
                 onColorChange={handleColorChange}
-                attachmentPreview={pendingImage}
-                onAttachmentChange={setPendingImage}
+                attachmentPreviews={pendingImages}
+                onAttachmentsChange={setPendingImages}
               />
             </div>
           </div>
@@ -310,6 +314,20 @@ function ChatPageInner() {
       </div>
     </div>
   );
+}
+
+function parseInitialImages(rawList: string | null, legacyImage: string | null) {
+  if (rawList) {
+    try {
+      const parsed = JSON.parse(rawList) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.filter((value): value is string => typeof value === "string");
+      }
+    } catch {
+      // Fall back to the legacy single-image handoff below.
+    }
+  }
+  return legacyImage ? [legacyImage] : [];
 }
 
 export default function ChatPage() {

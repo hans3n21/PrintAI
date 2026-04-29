@@ -66,7 +66,13 @@ function lerpPct(elapsedMs: number): number {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function ShirtLoadingAnimation() {
+type ShirtLoadingAnimationProps = {
+  variantCount?: number;
+};
+
+export default function ShirtLoadingAnimation({
+  variantCount = 1,
+}: ShirtLoadingAnimationProps) {
   const [showHeadline, setShowHeadline] = useState(false);
   const [showSubtitle, setShowSubtitle] = useState(false);
   const [showBar,      setShowBar]      = useState(false);
@@ -150,6 +156,10 @@ export default function ShirtLoadingAnimation() {
     transform: show ? "translateY(0)" : "translateY(10px)",
     transition: `opacity 1.8s ease ${delay}, transform 1.8s ease ${delay}`,
   });
+  const headline =
+    variantCount > 1
+      ? `Deine ${variantCount} Designvorschläge werden vorbereitet…`
+      : "Dein Shirt wird magisch herbeigerufen…";
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[520px] px-4 select-none">
@@ -254,7 +264,7 @@ export default function ShirtLoadingAnimation() {
 
       {/* Headline */}
       <h2 className="text-xl font-medium text-center mb-1 text-gray-900 dark:text-gray-100" style={fadeStyle(showHeadline)}>
-        Dein Shirt wird magisch herbeigerufen…
+        {headline}
       </h2>
 
       {/* Subtitle */}

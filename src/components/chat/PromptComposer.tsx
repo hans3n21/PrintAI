@@ -29,6 +29,8 @@ type PromptComposerProps = {
   onColorChange?: (color: ProductColor) => void;
   attachmentPreview?: string | null;
   onAttachmentChange?: (imageBase64: string | null) => void;
+  attachmentPreviews?: string[];
+  onAttachmentsChange?: (imageBase64List: string[]) => void;
   variant?: "landing" | "chat";
   loading?: boolean;
 };
@@ -108,6 +110,8 @@ export function PromptComposer({
   onColorChange,
   attachmentPreview,
   onAttachmentChange,
+  attachmentPreviews,
+  onAttachmentsChange,
   variant = "chat",
   loading = false,
 }: PromptComposerProps) {
@@ -122,8 +126,14 @@ export function PromptComposer({
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const selfieInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const attachments = attachmentPreviews ?? (attachmentPreview ? [attachmentPreview] : []);
+  const updateAttachments =
+    onAttachmentsChange ??
+    ((next: string[]) => {
+      onAttachmentChange?.(next[0] ?? null);
+    });
 
-  const hasAttachment = Boolean(attachmentPreview);
+  const hasAttachment = attachments.length > 0;
   const canSend = !disabled && !loading && (value.trim() || hasAttachment);
 
   const handleSend = () => {
@@ -134,16 +144,29 @@ export function PromptComposer({
   };
 
   const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []).filter((file) =>
+      file.type.startsWith("image/")
+    );
     event.target.value = "";
-    if (!file || !file.type.startsWith("image/")) return;
+    if (files.length === 0) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result === "string") onAttachmentChange?.(result);
-    };
-    reader.readAsDataURL(file);
+    const remainingSlots = Math.max(0, 5 - attachments.length);
+    const selectedFiles = files.slice(0, remainingSlots);
+    void Promise.all(
+      selectedFiles.map(
+        (file) =>
+          new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve(typeof reader.result === "string" ? reader.result : "");
+            };
+            reader.readAsDataURL(file);
+          })
+      )
+    ).then((results) => {
+      const next = [...attachments, ...results.filter(Boolean)].slice(0, 5);
+      updateAttachments(next);
+    });
   };
 
   const startVoiceInput = () => {
@@ -241,7 +264,7 @@ export function PromptComposer({
         className="min-h-20 w-full resize-none bg-transparent px-1 text-base leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-400 disabled:opacity-60"
       />
 
-      {(listening || voiceNotice || attachmentPreview) && (
+      {(listening || voiceNotice || hasAttachment) && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-violet-200">
           {listening && (
             <>
@@ -254,23 +277,33 @@ export function PromptComposer({
               {voiceNotice}
             </div>
           )}
-          {attachmentPreview && (
-            <div className="flex items-center gap-2 rounded-full border border-violet-500/40 bg-violet-500/10 py-1 pl-1 pr-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={attachmentPreview}
-                alt="Gewähltes Referenzbild"
-                className="h-7 w-7 rounded-full object-cover"
-              />
-              <span>Referenzbild gewählt</span>
-              <button
-                type="button"
-                className="rounded-full p-0.5 text-violet-200 hover:bg-violet-500/20"
-                onClick={() => onAttachmentChange?.(null)}
-                aria-label="Referenzbild entfernen"
-              >
-                <X className="h-3 w-3" />
-              </button>
+          {hasAttachment && (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-violet-500/40 bg-violet-500/10 p-1.5 pr-2">
+              {attachments.map((image, index) => (
+                <span key={`${image}-${index}`} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={image}
+                    alt="Gewähltes Referenzbild"
+                    className="h-7 w-7 rounded-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    className="absolute -right-1 -top-1 rounded-full bg-zinc-950 p-0.5 text-violet-200 hover:bg-violet-500/30"
+                    onClick={() =>
+                      updateAttachments(attachments.filter((_, i) => i !== index))
+                    }
+                    aria-label={`Referenzbild ${index + 1} entfernen`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <span>
+                {attachments.length === 1
+                  ? "1 Referenzbild gewählt"
+                  : `${attachments.length} Referenzbilder gewählt`}
+              </span>
             </div>
           )}
         </div>
@@ -290,6 +323,7 @@ export function PromptComposer({
             ref={galleryInputRef}
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
             onChange={onFileChange}
           />

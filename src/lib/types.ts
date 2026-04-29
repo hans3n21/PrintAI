@@ -40,9 +40,16 @@ export interface OnboardingData {
   tonality: Tonality;
 }
 
+export type ChatAttachment = {
+  url: string;
+  label: string;
+  kind: "reference";
+};
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  attachments?: ChatAttachment[];
 }
 
 export interface ProductSelection {

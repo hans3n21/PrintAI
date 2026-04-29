@@ -13,7 +13,8 @@ import type {
 
 const CREATIVE_BRIEF_SYSTEM_PROMPT = `You create production creative briefs for print-on-demand image generation.
 
-Use the full chat history. Do not discard concrete user motifs, hobbies, animals, seasons, vehicles, locations, or inside jokes.
+Use the full chat history. Do not discard concrete user motifs, hobbies, animals, seasons, vehicles, locations, inside jokes, concrete actions, or scene relationships.
+Preserve who does what to whom. If the user describes an action scene, keep that full scene as one must_include_visuals item instead of reducing it to isolated objects.
 
 For any team or club shirt, preserve layout wishes such as logo, sponsor, player name,
 number, front/back placement, chest/back placement, or "vorne/hinten" wording inside
@@ -53,6 +54,13 @@ function splitMotifPhrase(phrase: string): string[] {
     .map(toTitleCase);
 }
 
+function cleanupActionPhrase(phrase: string): string {
+  return phrase
+    .replace(/^.*?\bwo\s+/i, "")
+    .replace(/^(?:genau|ja|und|bitte|mach(?:e)?(?:\s+ein(?:e|en)?\s+\w+)?),?\s+/i, "")
+    .trim();
+}
+
 export function extractConcreteUserMotifs(history: ChatMessage[]): string[] {
   const motifs: string[] = [];
   const seen = new Set<string>();
@@ -72,6 +80,19 @@ export function extractConcreteUserMotifs(history: ChatMessage[]): string[] {
     );
     for (const match of matches) {
       for (const motif of splitMotifPhrase(match[1] ?? "")) add(motif);
+    }
+
+    for (const sentence of content.split(/[.!?]/)) {
+      if (!/\b(jagen|verfolgen)\b/i.test(sentence)) continue;
+      const action = cleanupActionPhrase(sentence);
+      if (action.length >= 8) add(action);
+    }
+
+    const chaseMatches = content.matchAll(
+      /\b((?:zwei|2|die beiden|[a-zäöüß]+(?:\s+und\s+[a-zäöüß]+)?)\s+(?:leute|personen|figuren|typen|sollen\s+)?(?:\w+\s+){0,4}?(?:jagen|verfolgen)\s+(?:einen?|eine|den|die|das)?\s*[a-zäöüß]+)\b/gi
+    );
+    for (const match of chaseMatches) {
+      add(match[1] ?? "");
     }
   }
 

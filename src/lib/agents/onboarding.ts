@@ -27,6 +27,7 @@ export type OnboardingResult = OnboardingIncomplete | OnboardingComplete;
 
 type OnboardingOptions = {
   referenceImageUrl?: string;
+  referenceImageUrls?: string[];
   productSelection?: ProductSelection | null;
   referenceImages?: ReferenceImageAsset[];
 };
@@ -193,16 +194,19 @@ export async function runOnboardingMessage(
   userMessage: string,
   options?: OnboardingOptions
 ): Promise<OnboardingResult> {
+  const referenceImageUrls =
+    options?.referenceImageUrls ??
+    (options?.referenceImageUrl ? [options.referenceImageUrl] : []);
   const userBlock: ChatCompletionMessageParam =
-    options?.referenceImageUrl != null
+    referenceImageUrls.length > 0
       ? {
           role: "user",
           content: [
             { type: "text", text: userMessage },
-            {
-              type: "image_url",
-              image_url: { url: options.referenceImageUrl },
-            },
+            ...referenceImageUrls.map((url) => ({
+              type: "image_url" as const,
+              image_url: { url },
+            })),
           ],
         }
       : { role: "user", content: userMessage };

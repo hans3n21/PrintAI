@@ -7,6 +7,7 @@ import {
 import { mergeOnboardingWithProductSelection } from "@/lib/productSelection";
 import { supabaseAdmin } from "@/lib/supabase";
 import type {
+  ChatAttachment,
   ChatApiResponse,
   ChatMessage,
   OnboardingData,
@@ -28,6 +29,7 @@ function parseDataUrl(dataUrl: string): { mime: string; buffer: Buffer } | null 
 async function uploadReferenceImage(
   sessionId: string,
   dataUrl: string,
+  index: number,
   description?: string | null
 ): Promise<ReferenceImageAsset> {
   const parsed = parseDataUrl(dataUrl);
@@ -42,7 +44,7 @@ async function uploadReferenceImage(
         : parsed.mime === "image/webp"
           ? "webp"
           : "bin";
-  const filename = `${sessionId}/user_ref_${Date.now()}.${ext}`;
+  const filename = `${sessionId}/user_ref_${Date.now()}_${index}.${ext}`;
   const { error } = await supabaseAdmin.storage
     .from("designs")
     .upload(filename, parsed.buffer, { contentType: parsed.mime, upsert: true });
@@ -73,12 +75,23 @@ async function exportCreativeBrief(
   return data.publicUrl;
 }
 
-function userHistoryContent(text: string, refUrl?: string): string {
+function userHistoryContent(text: string, refUrls: string[]): string {
   const t = text.trim();
-  if (refUrl) {
-    return t ? `${t}\n(Referenzbild: ${refUrl})` : `(Referenzbild: ${refUrl})`;
+  if (refUrls.length > 0) {
+    const refs = refUrls
+      .map((url, index) => `Referenzbild ${index + 1}: ${url}`)
+      .join("\n");
+    return t ? `${t}\n(${refs})` : `(${refs})`;
   }
   return t;
+}
+
+function referenceAttachments(refUrls: string[]): ChatAttachment[] {
+  return refUrls.map((url, index) => ({
+    url,
+    label: `Referenzbild ${index + 1}`,
+    kind: "reference",
+  }));
 }
 
 async function finalizeOnboarding(
@@ -88,12 +101,17 @@ async function finalizeOnboarding(
   summary: string,
   data: OnboardingData,
   productSelection: ProductSelection | null | undefined,
-  referenceImages: ReferenceImageAsset[]
+  referenceImages: ReferenceImageAsset[],
+  userAttachments: ChatAttachment[] = []
 ) {
   const mergedData = mergeOnboardingWithProductSelection(data, productSelection);
   const completeHistory: ChatMessage[] = [
     ...history,
-    { role: "user", content: userContent },
+    {
+      role: "user",
+      content: userContent,
+      ...(userAttachments.length > 0 ? { attachments: userAttachments } : {}),
+    },
     { role: "assistant", content: summary },
   ];
   const creativeBrief = await buildCreativeBrief(
@@ -133,8 +151,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const sessionId = body.sessionId as string | undefined;
     const message = typeof body.message === "string" ? body.message : "";
+    const imageBase64List = Array.isArray(body.imageBase64List)
+      ? body.imageBase64List.filter((value: unknown): value is string =>
+          typeof value === "string" && value.trim().length > 0
+        )
+      : [];
     const imageBase64 =
       typeof body.imageBase64 === "string" ? body.imageBase64 : undefined;
+    const incomingImages =
+      imageBase64List.length > 0
+        ? imageBase64List.slice(0, 5)
+        : imageBase64?.trim()
+          ? [imageBase64]
+          : [];
     const forceComplete = body.forceComplete === true;
 
     if (!sessionId) {
@@ -172,47 +201,58 @@ export async function POST(request: Request) {
         result.summary,
         result.data,
         productSelection,
-        existingReferenceImages
+        existingReferenceImages,
+        []
       );
     }
 
-    let referenceImage: ReferenceImageAsset | undefined;
-    if (imageBase64?.trim()) {
-      referenceImage = await uploadReferenceImage(
-        sessionId,
-        imageBase64,
-        message
-          ? `Nutzerreferenz zum Wunsch: ${message.trim()}`
-          : "Nutzerreferenz ohne begleitenden Text"
-      );
-    }
-    const referenceImages = referenceImage
-      ? [...existingReferenceImages, referenceImage]
-      : existingReferenceImages;
+    const uploadedReferenceImages = await Promise.all(
+      incomingImages.map((image, index) =>
+        uploadReferenceImage(
+          sessionId,
+          image,
+          index + 1,
+          message
+            ? `Nutzerreferenz ${index + 1} zum Wunsch: ${message.trim()}`
+            : `Nutzerreferenz ${index + 1} ohne begleitenden Text`
+        )
+      )
+    );
+    const referenceImages = [...existingReferenceImages, ...uploadedReferenceImages];
+    const newReferenceUrls = uploadedReferenceImages.map((image) => image.url);
 
     const userLine =
       message.trim() ||
-      (referenceImage ? "(Nutzer hat ein Referenzbild gesendet.)" : "");
+      (uploadedReferenceImages.length === 1
+        ? "(Nutzer hat ein Referenzbild gesendet.)"
+        : uploadedReferenceImages.length > 1
+          ? `(Nutzer hat ${uploadedReferenceImages.length} Referenzbilder gesendet.)`
+          : "");
 
     if (!userLine) {
       return NextResponse.json(
-        { error: "message or imageBase64 required" },
+        { error: "message or reference image required" },
         { status: 400 }
       );
     }
 
     const result = await runOnboardingMessage(history, userLine, {
-      referenceImageUrl: referenceImage?.url,
+      referenceImageUrls: newReferenceUrls,
       productSelection,
       referenceImages,
     });
 
-    const storedUserContent = userHistoryContent(message, referenceImage?.url);
+    const storedUserContent = userHistoryContent(message, newReferenceUrls);
+    const storedAttachments = referenceAttachments(newReferenceUrls);
 
     if (!result.complete) {
       const newHistory: ChatMessage[] = [
         ...history,
-        { role: "user", content: storedUserContent },
+        {
+          role: "user",
+          content: storedUserContent,
+          ...(storedAttachments.length > 0 ? { attachments: storedAttachments } : {}),
+        },
         { role: "assistant", content: result.reply },
       ];
 
@@ -240,7 +280,8 @@ export async function POST(request: Request) {
       result.summary,
       result.data,
       productSelection,
-      referenceImages
+      referenceImages,
+      storedAttachments
     );
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "Unknown server error";

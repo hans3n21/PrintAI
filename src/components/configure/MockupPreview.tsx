@@ -47,7 +47,7 @@ export function MockupPreview({
         </div>
 
         {designUrl && (printArea === "front" || printArea === "both") && (
-          <div className="relative z-10 h-32 w-32 overflow-hidden rounded-2xl bg-black/10 shadow-lg shadow-black/20">
+          <div className="absolute inset-0 z-10 overflow-hidden rounded-[1.75rem] bg-black/10 shadow-lg shadow-black/20">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={designUrl} alt="Design preview" className="h-full w-full object-contain" />
           </div>

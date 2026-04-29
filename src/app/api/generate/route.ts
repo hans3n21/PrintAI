@@ -76,6 +76,12 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
+    if (session.status !== "generating") {
+      return NextResponse.json(
+        { error: "Design generation is not pending for this session" },
+        { status: 409 }
+      );
+    }
 
     const textCustom =
       session.onboarding_data &&

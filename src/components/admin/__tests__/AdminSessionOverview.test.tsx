@@ -181,6 +181,214 @@ describe("AdminSessionOverview", () => {
     );
   });
 
+  it("zooms admin design previews to cover the preview frame before dragging", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement
+    ) {
+      if (this.dataset.testid === "admin-media-preview-frame") {
+        return {
+          width: 400,
+          height: 300,
+          top: 0,
+          left: 0,
+          right: 400,
+          bottom: 300,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        };
+      }
+      if (this.alt === "Medienvorschau") {
+        return {
+          width: 260,
+          height: 300,
+          top: 0,
+          left: 70,
+          right: 330,
+          bottom: 300,
+          x: 70,
+          y: 0,
+          toJSON: () => ({}),
+        };
+      }
+      return {
+        width: 0,
+        height: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      };
+    });
+
+    render(<AdminSessionOverview />);
+
+    await screen.findByText("Fuchs im Cartoonstyle");
+    fireEvent.click(screen.getAllByAltText("Session Vorschau")[0]);
+
+    const dialog = await screen.findByRole("dialog", { name: "Medienvorschau" });
+    const previewButton = within(dialog).getByRole("button", {
+      name: "Medienvorschau vergrößern",
+    });
+    expect(within(dialog).getByTestId("admin-media-preview-frame")).toBe(previewButton);
+
+    fireEvent.click(previewButton);
+    expect(previewButton).toHaveAttribute("aria-pressed", "true");
+    expect(previewButton).toHaveClass("cursor-grab");
+    expect(within(dialog).getByAltText("Medienvorschau")).toHaveStyle({
+      transform: "translate(0px, 0px) scale(1.54)",
+    });
+
+    fireEvent.wheel(previewButton, { deltaY: -100 });
+    expect(within(dialog).getByAltText("Medienvorschau")).toHaveStyle({
+      transform: "translate(0px, 0px) scale(1.64)",
+    });
+
+    fireEvent.mouseDown(previewButton, { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(previewButton, { clientX: 1000, clientY: -1000 });
+
+    expect(within(dialog).getByAltText("Medienvorschau")).toHaveStyle({
+      transform: "translate(128px, -96px) scale(1.64)",
+    });
+  });
+
+  it("uses the natural image ratio so one click makes square designs touch the frame edges", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement
+    ) {
+      if (this.dataset.testid === "admin-media-preview-frame") {
+        return {
+          width: 731,
+          height: 437,
+          top: 0,
+          left: 0,
+          right: 731,
+          bottom: 437,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        };
+      }
+      if (this.alt === "Medienvorschau") {
+        return {
+          width: 731,
+          height: 437,
+          top: 0,
+          left: 0,
+          right: 731,
+          bottom: 437,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        };
+      }
+      return {
+        width: 0,
+        height: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      };
+    });
+    vi.spyOn(HTMLImageElement.prototype, "naturalWidth", "get").mockReturnValue(1024);
+    vi.spyOn(HTMLImageElement.prototype, "naturalHeight", "get").mockReturnValue(1024);
+
+    render(<AdminSessionOverview />);
+
+    await screen.findByText("Fuchs im Cartoonstyle");
+    fireEvent.click(screen.getAllByAltText("Session Vorschau")[0]);
+
+    const dialog = await screen.findByRole("dialog", { name: "Medienvorschau" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Medienvorschau vergrößern" }));
+
+    expect(within(dialog).getByAltText("Medienvorschau")).toHaveStyle({
+      transform: "translate(0px, 0px) scale(1.67)",
+    });
+  });
+
+  it("opens the same design variant as the session thumbnail", async () => {
+    const selectedThumbnailSummary = {
+      sessions: [
+        {
+          ...summaryResponse.sessions[1],
+          thumbnail_url: "https://example.com/fuchs-2.png",
+        },
+      ],
+    };
+    vi.mocked(global.fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("id=older-session")) {
+        return Response.json({
+          session: {
+            ...olderDetail.session,
+            selected_design_url: "https://example.com/fuchs-2.png",
+          },
+        });
+      }
+      return Response.json(selectedThumbnailSummary);
+    });
+
+    render(<AdminSessionOverview />);
+
+    await screen.findByText("Fuchs im Cartoonstyle");
+    fireEvent.click(screen.getByAltText("Session Vorschau"));
+
+    const dialog = await screen.findByRole("dialog", { name: "Medienvorschau" });
+    expect(within(dialog).getByAltText("Medienvorschau")).toHaveAttribute(
+      "src",
+      "https://example.com/fuchs-2.png"
+    );
+    expect(within(dialog).getByText("2 von 2 Bildvarianten")).toBeInTheDocument();
+  });
+
+  it("includes structured design assets in the admin lightbox variants", async () => {
+    const assetSummary = {
+      sessions: [
+        {
+          ...summaryResponse.sessions[2],
+          design_count: 2,
+        },
+      ],
+    };
+    vi.mocked(global.fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("id=third-session")) {
+        return Response.json({
+          session: {
+            ...thirdDetail.session,
+            design_urls: ["https://example.com/hoodie.png"],
+            design_assets: [
+              { preview_url: "https://example.com/hoodie-asset.png" },
+            ],
+          },
+        });
+      }
+      return Response.json(assetSummary);
+    });
+
+    render(<AdminSessionOverview />);
+
+    await screen.findByText("Logo Hoodie");
+    fireEvent.click(screen.getByAltText("Session Vorschau"));
+
+    const dialog = await screen.findByRole("dialog", { name: "Medienvorschau" });
+    expect(within(dialog).getByText("1 von 2 Bildvarianten")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Design 2 anzeigen" }));
+
+    expect(within(dialog).getByAltText("Medienvorschau")).toHaveAttribute(
+      "src",
+      "https://example.com/hoodie-asset.png"
+    );
+  });
+
   it("supports swiping through lightbox images", async () => {
     render(<AdminSessionOverview />);
 
@@ -324,6 +532,22 @@ describe("AdminSessionOverview", () => {
     expect(toolbar).toHaveClass("sticky");
     expect(within(navigation).getByRole("button", { name: "Vorheriges Design" })).toBeInTheDocument();
     expect(within(navigation).getByRole("button", { name: "Nächstes Design" })).toBeInTheDocument();
+  });
+
+  it("keeps the media preview position stable by truncating long summaries above it", async () => {
+    render(<AdminSessionOverview />);
+
+    await screen.findByText("Fuchs im Cartoonstyle");
+    fireEvent.click(screen.getAllByAltText("Session Vorschau")[0]);
+
+    const dialog = await screen.findByRole("dialog", { name: "Medienvorschau" });
+    const summary = within(dialog).getByTestId("admin-media-preview-summary");
+
+    expect(summary).toHaveClass("truncate");
+    expect(summary).toHaveClass("h-6");
+
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Infos" }));
+    expect(within(dialog).getAllByText("Fuchs im Cartoonstyle").length).toBeGreaterThan(1);
   });
 
   it("keeps reference images constrained as thumbnails in the lightbox", async () => {

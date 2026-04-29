@@ -1,4 +1,5 @@
 import { ADMIN_COOKIE_NAME, isAdminCookieValid } from "@/lib/adminAuth";
+import { collectDisplayDesignUrls } from "@/lib/designPageGeneration";
 import { supabaseAdmin } from "@/lib/supabase";
 import type {
   ChatMessage,
@@ -43,7 +44,7 @@ async function requireAdmin() {
 }
 
 function summarizeSession(row: SessionRow) {
-  const designUrls = row.design_urls ?? [];
+  const designUrls = collectDisplayDesignUrls(row);
   const slogans = row.slogans ?? [];
   const history = row.conversation_history ?? [];
   const onboarding = row.onboarding_data ?? {};
@@ -94,7 +95,7 @@ function detailSession(row: SessionRow) {
 }
 
 const SUMMARY_SELECT =
-  "id, created_at, updated_at, status, conversation_history, onboarding_data, product_selection, creative_brief, design_urls, selected_design_url, slogans";
+  "id, created_at, updated_at, status, conversation_history, onboarding_data, product_selection, creative_brief, design_urls, design_assets, selected_design_url, slogans";
 
 const DETAIL_SELECT =
   "id, created_at, updated_at, status, conversation_history, onboarding_data, product_selection, creative_brief, prompt_data, design_urls, design_assets, reference_images, slogans, selected_design_url, selected_slogan, config";

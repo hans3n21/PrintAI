@@ -1,7 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 export type LightboxItem = {
   id?: string;
@@ -18,6 +20,29 @@ type ImageLightboxProps = {
   onDelete?: (item: LightboxItem) => void;
 };
 
+const CLICK_ZOOM_SCALE = 1.25;
+const MAX_ZOOM_SCALE = 2;
+const WHEEL_ZOOM_STEP = 0.1;
+
+function clampZoomScale(scale: number) {
+  return Math.min(MAX_ZOOM_SCALE, Math.max(1, Number(scale.toFixed(2))));
+}
+
+function clampPanOffset(
+  offset: { x: number; y: number },
+  scale: number,
+  boundsElement: HTMLElement
+) {
+  const bounds = boundsElement.getBoundingClientRect();
+  if (bounds.width <= 0 || bounds.height <= 0) return offset;
+  const maxX = (bounds.width * (scale - 1)) / 2;
+  const maxY = (bounds.height * (scale - 1)) / 2;
+  return {
+    x: Number(Math.min(maxX, Math.max(-maxX, offset.x)).toFixed(2)),
+    y: Number(Math.min(maxY, Math.max(-maxY, offset.y)).toFixed(2)),
+  };
+}
+
 export function ImageLightbox({
   items,
   activeIndex,
@@ -25,12 +50,87 @@ export function ImageLightbox({
   onClose,
   onDelete,
 }: ImageLightboxProps) {
+  const [zoomScale, setZoomScale] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    moved: boolean;
+  } | null>(null);
   const item = items[activeIndex];
+
+  useEffect(() => {
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+    dragRef.current = null;
+  }, [activeIndex]);
+
   if (!item) return null;
 
   const canMove = items.length > 1;
   const previousIndex = (activeIndex - 1 + items.length) % items.length;
   const nextIndex = (activeIndex + 1) % items.length;
+  const isZoomed = zoomScale > 1;
+  const toggleZoom = () => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (drag?.moved) return;
+
+    setZoomScale((current) => {
+      if (current > 1) {
+        setPanOffset({ x: 0, y: 0 });
+        return 1;
+      }
+      return CLICK_ZOOM_SCALE;
+    });
+  };
+  const adjustZoomWithWheel = (deltaY: number) => {
+    setZoomScale((current) => {
+      const next = clampZoomScale(
+        current + (deltaY < 0 ? WHEEL_ZOOM_STEP : -WHEEL_ZOOM_STEP)
+      );
+      if (next <= 1) {
+        setPanOffset({ x: 0, y: 0 });
+        return 1;
+      }
+      return next;
+    });
+  };
+  const startDrag = (clientX: number, clientY: number) => {
+    if (!isZoomed) return;
+    dragRef.current = {
+      startX: clientX,
+      startY: clientY,
+      originX: panOffset.x,
+      originY: panOffset.y,
+      moved: false,
+    };
+  };
+  const updateDrag = (
+    clientX: number,
+    clientY: number,
+    boundsElement: HTMLElement
+  ) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const dx = clientX - drag.startX;
+    const dy = clientY - drag.startY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+      drag.moved = true;
+    }
+    setPanOffset(
+      clampPanOffset(
+        {
+          x: drag.originX + dx,
+          y: drag.originY + dy,
+        },
+        zoomScale,
+        boundsElement
+      )
+    );
+  };
 
   return (
     <div
@@ -86,12 +186,38 @@ export function ImageLightbox({
               <ChevronLeft className="h-6 w-6" />
             </button>
           )}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={item.url}
-            alt={item.label}
-            className="max-h-[70vh] w-full rounded-3xl bg-zinc-950/50 object-contain shadow-inner"
-          />
+          <button
+            type="button"
+            aria-label={`${item.label} ${isZoomed ? "verkleinern" : "vergrößern"}`}
+            aria-pressed={isZoomed}
+            onClick={toggleZoom}
+            onWheel={(event) => {
+              event.preventDefault();
+              adjustZoomWithWheel(event.deltaY);
+            }}
+            onMouseDown={(event) => startDrag(event.clientX, event.clientY)}
+            onMouseMove={(event) =>
+              updateDrag(event.clientX, event.clientY, event.currentTarget)
+            }
+            onMouseLeave={() => {
+              dragRef.current = null;
+            }}
+            className={cn(
+              "group flex max-h-[70vh] w-full items-center justify-center overflow-hidden rounded-3xl bg-zinc-950/50 shadow-inner outline-none ring-violet-400/50 transition focus-visible:ring-2",
+              isZoomed ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"
+            )}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={item.url}
+              alt={item.label}
+              draggable={false}
+              className="max-h-[70vh] w-full select-none object-contain transition-transform duration-300 ease-out"
+              style={{
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
+              }}
+            />
+          </button>
           {canMove && (
             <button
               type="button"
@@ -109,6 +235,9 @@ export function ImageLightbox({
             Bild {activeIndex + 1} von {items.length}
           </div>
         )}
+        <div className="border-t border-zinc-700/60 px-4 py-3 text-center text-xs text-zinc-500">
+          Klick: zurücksetzen · Mausrad: Zoom · Ziehen: verschieben
+        </div>
       </div>
     </div>
   );

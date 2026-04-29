@@ -73,6 +73,28 @@ describe("runOnboardingMessage globhanes", () => {
     expect(call.temperature).toBeLessThanOrEqual(0.3);
   });
 
+  it("forbids user-visible preparation filler before completion", async () => {
+    vi.mocked(openai.chat.completions.create).mockResolvedValueOnce({
+      choices: [{ message: { content: "Ich bereite alles vor." } }],
+    } as never);
+
+    await runOnboardingMessage(
+      [],
+      "JGA-Shirt, Mallorca, Cartoon-Style",
+      { productSelection }
+    );
+
+    const call = vi.mocked(openai.chat.completions.create).mock.calls[0][0];
+    const system = call.messages?.[0];
+    const content = typeof system?.content === "string" ? system.content : "";
+
+    expect(content).toContain('"Ich mache jetzt das JSON fertig"');
+    expect(content).toContain('"Ich bereite alles vor"');
+    expect(content).toContain("Abschluss-Fuellsaetze");
+    expect(content).toContain("gib sofort das JSON aus");
+    expect(content).not.toContain("Sage stattdessen nutzerfreundlich");
+  });
+
   it("includes concrete examples forbidding date and slogan follow-up when required fields are known", async () => {
     vi.mocked(openai.chat.completions.create).mockResolvedValueOnce({
       choices: [{ message: { content: "Alles klar!" } }],

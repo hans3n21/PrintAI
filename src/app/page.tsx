@@ -9,7 +9,7 @@ import { AppNotice } from "@/components/ui/appSurface";
 import type { ProductColor, ProductSelection } from "@/lib/types";
 
 export default function LandingPage() {
-  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [productSelection, setProductSelection] = useState<ProductSelection>({
     product: "tshirt",
     product_color: "black",
@@ -21,7 +21,9 @@ export default function LandingPage() {
 
   const handleStart = async (message: string) => {
     const trimmed = message.trim();
-    if ((!trimmed && !pendingImage) || loading) return;
+    if ((!trimmed && pendingImages.length === 0) || loading) return;
+    const initialMessage =
+      trimmed || "Bitte nutze meine Fotos als Referenz für das Design.";
     setLoading(true);
     setError(null);
 
@@ -30,7 +32,7 @@ export default function LandingPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          initial_message: trimmed || "Bitte nutze mein Foto als Referenz für das Design.",
+          initial_message: initialMessage,
           product_selection: productSelection,
         }),
       });
@@ -53,13 +55,42 @@ export default function LandingPage() {
         return;
       }
 
+      if (pendingImages.length > 0) {
+        const chatRes = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: data.sessionId,
+            message: initialMessage,
+            imageBase64List: pendingImages,
+          }),
+        });
+        const chatData = (await chatRes.json()) as {
+          complete?: boolean;
+          error?: string;
+        };
+
+        if (!chatRes.ok) {
+          setError(
+            typeof chatData.error === "string"
+              ? chatData.error
+              : `Chat konnte nicht gestartet werden (${chatRes.status}).`
+          );
+          setLoading(false);
+          return;
+        }
+
+        setPendingImages([]);
+        router.push(
+          chatData.complete ? `/designs/${data.sessionId}` : `/chat?s=${data.sessionId}`
+        );
+        return;
+      }
+
       sessionStorage.setItem(
         `printai_initial_${data.sessionId}`,
-        trimmed || "Bitte nutze mein Foto als Referenz für das Design."
+        initialMessage
       );
-      if (pendingImage) {
-        sessionStorage.setItem(`printai_initial_image_${data.sessionId}`, pendingImage);
-      }
       router.push(`/chat?s=${data.sessionId}`);
     } catch {
       setError("Netzwerkfehler – bitte prüfen, ob der Dev-Server läuft.");
@@ -93,8 +124,8 @@ export default function LandingPage() {
             onColorChange={(color: ProductColor) =>
               setProductSelection((prev) => ({ ...prev, product_color: color }))
             }
-            attachmentPreview={pendingImage}
-            onAttachmentChange={setPendingImage}
+            attachmentPreviews={pendingImages}
+            onAttachmentsChange={setPendingImages}
           />
         </div>
       </div>

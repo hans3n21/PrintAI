@@ -158,6 +158,32 @@ describe("GET /api/admin/sessions", () => {
     expect(json.session.creative_brief).toEqual(fullSession.creative_brief);
     expect(json.session.design_assets).toEqual(fullSession.design_assets);
   });
+
+  it("counts structured design assets in lightweight summaries", async () => {
+    mockAdminCookie(ADMIN_COOKIE_VALUE);
+    mockQuery({
+      data: [
+        {
+          ...fullSession,
+          design_urls: [],
+          design_assets: [
+            { preview_url: "https://example.com/asset-1.png" },
+            { preview_url: "https://example.com/asset-2.png" },
+          ],
+        },
+      ],
+      error: null,
+    });
+
+    const response = await GET(new Request("https://example.com/api/admin/sessions"));
+    const json = await response.json();
+
+    expect(json.sessions[0]).toMatchObject({
+      thumbnail_url: "https://example.com/asset-1.png",
+      design_count: 2,
+      has_designs: true,
+    });
+  });
 });
 
 describe("DELETE /api/admin/sessions", () => {

@@ -26,6 +26,7 @@ export function buildPromptFromCreativeBrief(
   const safeTemplateRules = (templateRules ?? []).filter(
     (rule) => !/transparent background|isolated motif/i.test(rule)
   );
+  const styleGuidance = getStyleGuidance(brief);
   const parts = [
     `Create a polished ${productLabel} mockup preview for this creative brief: ${brief.theme}.`,
     mockupInstruction,
@@ -47,6 +48,13 @@ export function buildPromptFromCreativeBrief(
     parts.push(
       `IMPORTANT: Include exactly this readable text in the design: "${brief.exact_text.trim()}".`
     );
+  }
+  if (styleGuidance) {
+    parts.push(styleGuidance.prompt);
+  }
+  const actionGuidance = getActionGuidance(brief);
+  if (actionGuidance) {
+    parts.push(actionGuidance);
   }
   if (safeTemplateRules.length) {
     parts.push(`Print template rules:\n- ${safeTemplateRules.join("\n- ")}`);
@@ -73,10 +81,62 @@ export function buildPromptFromCreativeBrief(
   }
   parts.push(
     "Safety guide: Keep the scene non-violent and playful; no weapons, blood, injury, gore, fighting, or threatening action.",
-    "Technical specs: mockup preview, opaque product background, no checkerboard transparency pattern, clean product silhouette, centered composition, flat design, vector-like clean edges, high contrast readable typography. Do not render a checkerboard."
+    styleGuidance?.technicalSpecs ??
+      "Technical specs: mockup preview, opaque product background, no checkerboard transparency pattern, clean product silhouette, centered composition, flat design, vector-like clean edges, high contrast readable typography. Do not render a checkerboard."
   );
 
   return parts.join("\n");
+}
+
+function getActionGuidance(brief: CreativeBrief): string | null {
+  const actionText = [
+    brief.theme,
+    brief.source_summary,
+    ...brief.must_include_visuals,
+  ].join(" ");
+
+  if (/\b(jagen|verfolgen|chase|hunt)\b/i.test(actionText)) {
+    return [
+      "Action fidelity: preserve the user's chase scene as a playful slapstick chase.",
+      "If wording says people jagen/verfolgen something, render it as characters running after it comedically, not threatening and no violence.",
+      "Keep the chased subject recognizable as part of the action, not as a standalone mascot replacing the scene.",
+    ].join(" ");
+  }
+
+  return null;
+}
+
+function getStyleGuidance(
+  brief: CreativeBrief
+): { prompt: string; technicalSpecs: string } | null {
+  const styleText = [
+    brief.style,
+    brief.theme,
+    brief.source_summary,
+    ...brief.must_include_visuals,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (/\b(aquarell|watercolor|wasserfarbe)\b/.test(styleText)) {
+    return {
+      prompt:
+        "Style fidelity: watercolor painting, soft washes, visible paper texture, translucent pigments, organic edges. Avoid style drift: not vector art, not digital illustration.",
+      technicalSpecs:
+        "Technical specs: mockup preview, opaque product background, no checkerboard transparency pattern, clean product silhouette, centered composition, print-ready contrast, readable typography. Do not render a checkerboard.",
+    };
+  }
+
+  if (/\b(minimalistisch|minimalist|minimal|minimalistische)\b/.test(styleText)) {
+    return {
+      prompt:
+        "Style fidelity: minimal composition, few elements, lots of negative space, simple shapes, restrained palette. Avoid style drift: no intricate detail, no busy background, no over-rendered textures.",
+      technicalSpecs:
+        "Technical specs: mockup preview, opaque product background, no checkerboard transparency pattern, clean product silhouette, centered composition, flat design, clean edges, high contrast readable typography. Do not render a checkerboard.",
+    };
+  }
+
+  return null;
 }
 
 function hasPlacementIntent(brief: CreativeBrief): boolean {

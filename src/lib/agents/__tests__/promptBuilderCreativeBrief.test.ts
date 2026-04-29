@@ -142,4 +142,76 @@ describe("buildPromptFromCreativeBrief", () => {
     expect(prompt).toContain("Logo vorne");
     expect(prompt).toContain("Nummer auf der Rückseite");
   });
+
+  it("preserves watercolor style hints instead of forcing vector-like digital art", () => {
+    const brief: CreativeBrief = {
+      occasion: "sonstiges",
+      product: "tshirt",
+      style: "sonstiges",
+      tone: "elegant",
+      theme: "Aquarell-Stil mit zarten Blumen",
+      exact_text: null,
+      must_include_visuals: ["zarte Blumen"],
+      avoid: [],
+      reference_images: [],
+      source_summary: "Der Nutzer wuenscht ein Motiv im Aquarell-Stil.",
+    };
+
+    const prompt = buildPromptFromCreativeBrief(brief, null, []);
+
+    expect(prompt).toContain("Style fidelity");
+    expect(prompt).toContain("watercolor painting");
+    expect(prompt).toContain("soft washes");
+    expect(prompt).toContain("Avoid style drift: not vector art, not digital illustration");
+    expect(prompt).not.toContain("vector-like clean edges");
+  });
+
+  it("keeps minimalist requests sparse and avoids unnecessary detail", () => {
+    const brief: CreativeBrief = {
+      occasion: "sonstiges",
+      product: "tshirt",
+      style: "minimalistisch",
+      tone: "elegant",
+      theme: "Minimalistisches Bergmotiv",
+      exact_text: null,
+      must_include_visuals: ["Berge"],
+      avoid: [],
+      reference_images: [],
+      source_summary: "Ein minimalistisches Shirt mit Bergen.",
+    };
+
+    const prompt = buildPromptFromCreativeBrief(brief, null, []);
+
+    expect(prompt).toContain("Style fidelity");
+    expect(prompt).toContain("minimal composition");
+    expect(prompt).toContain("few elements");
+    expect(prompt).toContain("lots of negative space");
+    expect(prompt).toContain("Avoid style drift: no intricate detail");
+  });
+
+  it("turns chase wording into a playful non-threatening scene instruction", () => {
+    const brief: CreativeBrief = {
+      occasion: "sonstiges",
+      product: "tshirt",
+      style: "sonstiges",
+      tone: "witzig",
+      theme: "Aquarell-Brokkoli beim Klappstuhl-Insider",
+      exact_text: "Einweihung des chinesischen Klappstuhls",
+      must_include_visuals: [
+        "Zwei Leute jagen einen Brokkoli",
+        "chinesischer Klappstuhl",
+      ],
+      avoid: [],
+      reference_images: [],
+      source_summary:
+        "Zwei Leute jagen einen Brokkoli bei der Einweihung des chinesischen Klappstuhls.",
+    };
+
+    const prompt = buildPromptFromCreativeBrief(brief, null, []);
+
+    expect(prompt).toContain("playful slapstick chase");
+    expect(prompt).toContain("Zwei Leute jagen einen Brokkoli");
+    expect(prompt).toContain("not threatening");
+    expect(prompt).toContain("no violence");
+  });
 });
