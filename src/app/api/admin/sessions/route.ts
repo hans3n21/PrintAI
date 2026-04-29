@@ -72,6 +72,7 @@ function summarizeSession(row: SessionRow) {
     design_count: designUrls.length,
     has_designs: designUrls.length > 0,
     has_chat: history.length > 0,
+    reference_count: row.reference_images?.filter((image) => image.url).length ?? 0,
     slogan_count: slogans.length,
   };
 }
@@ -95,7 +96,7 @@ function detailSession(row: SessionRow) {
 }
 
 const SUMMARY_SELECT =
-  "id, created_at, updated_at, status, conversation_history, onboarding_data, product_selection, creative_brief, design_urls, design_assets, selected_design_url, slogans";
+  "id, created_at, updated_at, status, conversation_history, onboarding_data, product_selection, creative_brief, design_urls, design_assets, reference_images, selected_design_url, slogans";
 
 const DETAIL_SELECT =
   "id, created_at, updated_at, status, conversation_history, onboarding_data, product_selection, creative_brief, prompt_data, design_urls, design_assets, reference_images, slogans, selected_design_url, selected_slogan, config";

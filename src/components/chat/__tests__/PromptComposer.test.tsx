@@ -129,3 +129,22 @@ describe("PromptComposer attachments", () => {
     expect(screen.getAllByAltText("Gewähltes Referenzbild")).toHaveLength(2);
   });
 });
+
+describe("PromptComposer color controls", () => {
+  it("keeps the color picker button hover effect unclipped", () => {
+    render(
+      <PromptComposer
+        onSend={vi.fn()}
+        selectedColor="black"
+        onColorChange={vi.fn()}
+      />
+    );
+
+    const colorButton = screen.getByRole("button", {
+      name: "Produktfarbe auswählen",
+    });
+
+    expect(colorButton.parentElement).toHaveClass("overflow-visible");
+    expect(colorButton.parentElement).not.toHaveClass("overflow-hidden");
+  });
+});

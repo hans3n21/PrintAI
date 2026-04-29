@@ -97,7 +97,15 @@ const fullSession = {
   prompt_data: { prompt: "prompt" },
   design_urls: ["https://example.com/design.png"],
   design_assets: [{ id: "asset-1" }],
-  reference_images: [],
+  reference_images: [
+    {
+      url: "https://example.com/reference.png",
+      storage_path: "session-1/reference.png",
+      mime: "image/png",
+      uploaded_at: "2026-04-29T00:01:00.000Z",
+      description: "Referenzfoto",
+    },
+  ],
   slogans: [{ main_text: "Teamgeist" }],
   selected_design_url: null,
   selected_slogan: null,
@@ -136,6 +144,7 @@ describe("GET /api/admin/sessions", () => {
       thumbnail_url: "https://example.com/design.png",
       has_chat: true,
       has_designs: true,
+      reference_count: 1,
       slogan_count: 1,
     });
     expect(json.sessions[0]).not.toHaveProperty("conversation_history");

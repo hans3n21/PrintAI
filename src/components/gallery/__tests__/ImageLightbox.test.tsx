@@ -104,4 +104,38 @@ describe("ImageLightbox", () => {
       transform: "translate(50px, 37.5px) scale(1.25)",
     });
   });
+
+  it("places reference thumbnails in a separate left-aligned header column", () => {
+    render(
+      <ImageLightbox
+        items={[
+          {
+            url: "https://example.com/design.png",
+            label: "Design 1",
+            kind: "design",
+          },
+        ]}
+        referenceItems={[
+          {
+            url: "https://example.com/reference.png",
+            label: "Nutzerreferenz 1",
+            kind: "upload",
+          },
+        ]}
+        activeIndex={0}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    const header = screen.getByTestId("image-lightbox-header");
+    const meta = screen.getByTestId("image-lightbox-header-meta");
+    const references = screen.getByTestId("image-lightbox-header-references");
+
+    expect(header).toContainElement(references);
+    expect(meta).not.toContainElement(references);
+    expect(references).toHaveClass("self-start");
+    expect(screen.queryByText("Referenzbilder")).not.toBeInTheDocument();
+    expect(screen.getByAltText("Nutzerreferenz 1")).toBeInTheDocument();
+  });
 });

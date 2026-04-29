@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/appSurface";
 import { collectDisplayDesignUrls } from "@/lib/designPageGeneration";
 import type { ChatMessage, SessionStatus } from "@/lib/types";
+import { Images } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -26,6 +27,7 @@ type AdminSessionSummary = {
   design_count: number;
   has_designs: boolean;
   has_chat: boolean;
+  reference_count: number;
   slogan_count: number;
 };
 
@@ -696,7 +698,7 @@ function SessionCard({
     <article className="rounded-3xl border border-zinc-700/70 bg-zinc-950/50 p-4">
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="w-full sm:w-36">
-          <div className="h-28 w-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+          <div className="relative h-28 w-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
             {session.thumbnail_url ? (
               <button
                 type="button"
@@ -715,6 +717,15 @@ function SessionCard({
               <div className="flex h-full items-center justify-center px-4 text-center text-xs text-zinc-500">
                 Noch keine Vorschaubilder bereit
               </div>
+            )}
+            {session.reference_count > 0 && (
+              <span
+                aria-label="Session enthält Referenzbilder"
+                title={`${session.reference_count} Referenzbild${session.reference_count === 1 ? "" : "er"}`}
+                className="absolute bottom-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-violet-300/50 bg-black/70 text-violet-100 shadow-sm shadow-black/40 backdrop-blur"
+              >
+                <Images className="h-3.5 w-3.5" />
+              </span>
             )}
           </div>
           <button

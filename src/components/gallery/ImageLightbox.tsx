@@ -18,6 +18,7 @@ type ImageLightboxProps = {
   onSelect: (index: number) => void;
   onClose: () => void;
   onDelete?: (item: LightboxItem) => void;
+  referenceItems?: LightboxItem[];
 };
 
 const CLICK_ZOOM_SCALE = 1.25;
@@ -49,6 +50,7 @@ export function ImageLightbox({
   onSelect,
   onClose,
   onDelete,
+  referenceItems = [],
 }: ImageLightboxProps) {
   const [zoomScale, setZoomScale] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -144,12 +146,38 @@ export function ImageLightbox({
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"
     >
       <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col rounded-[2rem] border border-zinc-700/80 bg-zinc-800/90 shadow-2xl shadow-black/50 ring-1 ring-white/5 backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-3 border-b border-zinc-700/60 px-5 py-4">
-          <div>
-            <p className="text-sm font-semibold text-white">{item.label}</p>
-            <p className="text-xs uppercase tracking-wide text-zinc-500">
-              {item.kind === "design" ? "Design" : "Upload"}
-            </p>
+        <div
+          data-testid="image-lightbox-header"
+          className="flex items-center justify-between gap-3 border-b border-zinc-700/60 px-5 py-4"
+        >
+          <div className="flex min-w-0 items-center gap-4">
+            <div data-testid="image-lightbox-header-meta" className="min-w-0">
+              <p className="text-sm font-semibold text-white">{item.label}</p>
+              <p className="text-xs uppercase tracking-wide text-zinc-500">
+                {item.kind === "design" ? "Design" : "Upload"}
+              </p>
+            </div>
+            {item.kind === "design" && referenceItems.length > 0 && (
+              <div
+                data-testid="image-lightbox-header-references"
+                className="flex min-w-0 self-start overflow-x-auto gap-2"
+              >
+                {referenceItems.map((reference) => (
+                  <div
+                    key={`${reference.kind}-${reference.url}`}
+                    className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-zinc-700/70 bg-zinc-950/60"
+                    title={reference.label}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={reference.url}
+                      alt={reference.label}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {onDelete && item.id && (

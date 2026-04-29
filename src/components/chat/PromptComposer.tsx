@@ -358,7 +358,7 @@ export function PromptComposer({
             <Mic className="h-4 w-4" />
           </ComposerIconButton>
           {selectedColor && onColorChange && (
-            <div className="flex items-center gap-2 overflow-hidden">
+            <div className="flex items-center gap-2 overflow-visible">
               <ComposerIconButton
                 label="Produktfarbe auswählen"
                 disabled={disabled || loading}

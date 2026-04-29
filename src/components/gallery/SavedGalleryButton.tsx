@@ -37,15 +37,23 @@ export function SavedGalleryButton() {
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [open]);
 
-  if (items.length === 0) return null;
+  const designItems = items.filter((item) => item.kind === "design");
+  if (designItems.length === 0) return null;
+  const activeItem = activeIndex === null ? null : designItems[activeIndex];
+  const activeReferenceItems = activeItem
+    ? items.filter(
+        (item) => item.kind !== "design" && item.sessionId === activeItem.sessionId
+      )
+    : [];
 
   const handleDelete = (id: string) => {
     const remaining = deleteSavedGalleryItem(id);
+    const remainingDesigns = remaining.filter((item) => item.kind === "design");
     setItems(remaining);
     setActiveIndex((current) => {
       if (current === null) return null;
-      if (remaining.length === 0) return null;
-      return Math.min(current, remaining.length - 1);
+      if (remainingDesigns.length === 0) return null;
+      return Math.min(current, remainingDesigns.length - 1);
     });
   };
 
@@ -65,7 +73,8 @@ export function SavedGalleryButton() {
       {open && (
         <div
           ref={panelRef}
-          className="fixed inset-x-4 bottom-16 z-50 mx-auto max-w-xl rounded-[2rem] border border-zinc-700/80 bg-zinc-800/90 p-5 shadow-2xl shadow-black/40 ring-1 ring-white/5 backdrop-blur-xl"
+          data-testid="saved-gallery-panel"
+          className="fixed left-1/2 top-1/2 z-50 max-h-[min(88vh,42rem)] w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[2rem] border border-zinc-700/80 bg-zinc-800/90 p-5 shadow-2xl shadow-black/40 ring-1 ring-white/5 backdrop-blur-xl"
         >
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
@@ -84,7 +93,12 @@ export function SavedGalleryButton() {
             </button>
           </div>
           <div className="grid max-h-[55vh] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">
-            {items.map((item, index) => (
+            {designItems.map((item, index) => {
+              const hasReferenceImages = items.some(
+                (candidate) =>
+                  candidate.kind !== "design" && candidate.sessionId === item.sessionId
+              );
+              return (
               <figure
                 key={`${item.kind}-${item.url}`}
                 className="group space-y-2"
@@ -101,6 +115,15 @@ export function SavedGalleryButton() {
                     <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-200">
                       {item.kind === "design" ? "Design" : "Upload"}
                     </span>
+                    {hasReferenceImages && (
+                      <span
+                        aria-label="Design enthält Referenzbilder"
+                        title="Enthält Referenzbilder"
+                        className="absolute bottom-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-violet-300/50 bg-black/70 text-violet-100 shadow-sm shadow-black/40 backdrop-blur"
+                      >
+                        <Images className="h-3.5 w-3.5" />
+                      </span>
+                    )}
                   </button>
                   <button
                     type="button"
@@ -113,16 +136,18 @@ export function SavedGalleryButton() {
                 </div>
                 <figcaption className="line-clamp-2 text-xs text-zinc-400">{item.label}</figcaption>
               </figure>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
       {activeIndex !== null && (
         <ImageLightbox
-          items={items}
+          items={designItems}
           activeIndex={activeIndex}
           onSelect={setActiveIndex}
           onClose={() => setActiveIndex(null)}
+          referenceItems={activeReferenceItems}
           onDelete={(item) => {
             if (item.id) handleDelete(item.id);
           }}

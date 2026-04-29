@@ -36,6 +36,7 @@ const summaryResponse = {
       design_count: 2,
       has_designs: true,
       has_chat: true,
+      reference_count: 1,
       slogan_count: 3,
     },
     {
@@ -53,6 +54,7 @@ const summaryResponse = {
       design_count: 1,
       has_designs: true,
       has_chat: true,
+      reference_count: 0,
       slogan_count: 1,
     },
   ],
@@ -156,6 +158,14 @@ describe("AdminSessionOverview", () => {
       "/api/admin/sessions?id=older-session&include=details",
       { cache: "no-store" }
     );
+  });
+
+  it("marks admin preview thumbnails that include reference photos", async () => {
+    render(<AdminSessionOverview />);
+
+    await screen.findByText("Fuchs im Cartoonstyle");
+
+    expect(screen.getByLabelText("Session enthält Referenzbilder")).toBeInTheDocument();
   });
 
   it("opens a lightbox from generated designs and navigates between images", async () => {
