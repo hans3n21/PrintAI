@@ -83,7 +83,20 @@ describe("PromptComposer attachments", () => {
         this.onload?.();
       }
     }
+    class MockImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      width = 2400;
+      height = 1200;
+
+      set src(_value: string) {
+        this.onload?.();
+      }
+    }
+    const originalCreateElement = document.createElement.bind(document);
+    const toDataURL = vi.fn(() => "data:image/jpeg;base64,compressed");
     vi.stubGlobal("FileReader", MockFileReader);
+    vi.stubGlobal("Image", MockImage);
     const onAttachmentsChange = vi.fn();
     const { container } = render(
       <PromptComposer
@@ -92,6 +105,17 @@ describe("PromptComposer attachments", () => {
         onAttachmentsChange={onAttachmentsChange}
       />
     );
+    vi.spyOn(document, "createElement").mockImplementation((tagName) => {
+      if (tagName === "canvas") {
+        return {
+          width: 0,
+          height: 0,
+          getContext: vi.fn(() => ({ drawImage: vi.fn() })),
+          toDataURL,
+        } as unknown as HTMLCanvasElement;
+      }
+      return originalCreateElement(tagName);
+    });
 
     const galleryInput = container.querySelectorAll<HTMLInputElement>(
       'input[type="file"][accept="image/*"]'
@@ -109,8 +133,8 @@ describe("PromptComposer attachments", () => {
 
     await waitFor(() =>
       expect(onAttachmentsChange).toHaveBeenCalledWith([
-        "data:image/png;base64,person-1.png",
-        "data:image/jpeg;base64,person-2.jpg",
+        "data:image/jpeg;base64,compressed",
+        "data:image/jpeg;base64,compressed",
       ])
     );
 

@@ -87,4 +87,20 @@ describe("LandingPage", () => {
     );
     expect(pushMock).toHaveBeenCalledWith("/chat?s=session-1");
   });
+
+  it("shows a production-friendly error when the image chat request fails", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ sessionId: "session-1" }))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch")) as typeof fetch;
+
+    render(<LandingPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Starten" }));
+
+    expect(
+      await screen.findByText(/Bild-Upload konnte nicht abgeschlossen werden/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Dev-Server läuft/i)).not.toBeInTheDocument();
+  });
 });

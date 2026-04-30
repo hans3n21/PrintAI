@@ -93,7 +93,11 @@ export default function LandingPage() {
       );
       router.push(`/chat?s=${data.sessionId}`);
     } catch {
-      setError("Netzwerkfehler – bitte prüfen, ob der Dev-Server läuft.");
+      setError(
+        pendingImages.length > 0
+          ? "Bild-Upload konnte nicht abgeschlossen werden. Bitte versuche es erneut oder nutze zuerst ein einzelnes Foto."
+          : "Netzwerkfehler – bitte Internetverbindung prüfen und erneut versuchen."
+      );
       setLoading(false);
     }
   };

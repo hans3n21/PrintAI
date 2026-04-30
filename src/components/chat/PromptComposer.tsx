@@ -6,6 +6,7 @@ import {
   getDesktopCaptureLabel,
   type CameraCapability,
 } from "@/lib/cameraCapability";
+import { compressImageFileToDataUrl } from "@/lib/imageCompression";
 import { PRODUCT_COLORS } from "@/lib/productOptions";
 import { cn } from "@/lib/utils";
 import type { ProductColor } from "@/lib/types";
@@ -120,6 +121,7 @@ export function PromptComposer({
   const [listening, setListening] = useState(false);
   const [voicePreview, setVoicePreview] = useState("");
   const [voiceNotice, setVoiceNotice] = useState("");
+  const [uploadNotice, setUploadNotice] = useState("");
   const [cameraCapability, setCameraCapability] =
     useState<CameraCapability>("unknown");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -149,24 +151,27 @@ export function PromptComposer({
     );
     event.target.value = "";
     if (files.length === 0) return;
+    setUploadNotice("");
 
     const remainingSlots = Math.max(0, 5 - attachments.length);
     const selectedFiles = files.slice(0, remainingSlots);
-    void Promise.all(
-      selectedFiles.map(
-        (file) =>
-          new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              resolve(typeof reader.result === "string" ? reader.result : "");
-            };
-            reader.readAsDataURL(file);
-          })
-      )
-    ).then((results) => {
-      const next = [...attachments, ...results.filter(Boolean)].slice(0, 5);
-      updateAttachments(next);
-    });
+    void Promise.allSettled(selectedFiles.map(compressImageFileToDataUrl)).then(
+      (results) => {
+        const compressedImages = results
+          .filter((result): result is PromiseFulfilledResult<string> =>
+            result.status === "fulfilled"
+          )
+          .map((result) => result.value)
+          .filter(Boolean);
+        const next = [...attachments, ...compressedImages].slice(0, 5);
+        updateAttachments(next);
+        if (compressedImages.length < selectedFiles.length) {
+          setUploadNotice(
+            "Ein Bild konnte nicht verarbeitet werden. Bitte versuche ein anderes Foto."
+          );
+        }
+      }
+    );
   };
 
   const startVoiceInput = () => {
@@ -264,7 +269,7 @@ export function PromptComposer({
         className="min-h-20 w-full resize-none bg-transparent px-1 text-base leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-400 disabled:opacity-60"
       />
 
-      {(listening || voiceNotice || hasAttachment) && (
+      {(listening || voiceNotice || uploadNotice || hasAttachment) && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-violet-200">
           {listening && (
             <>
@@ -275,6 +280,11 @@ export function PromptComposer({
           {voiceNotice && (
             <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-yellow-200">
               {voiceNotice}
+            </div>
+          )}
+          {uploadNotice && (
+            <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-yellow-200">
+              {uploadNotice}
             </div>
           )}
           {hasAttachment && (
