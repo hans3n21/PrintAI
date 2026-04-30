@@ -155,7 +155,9 @@ export function PromptComposer({
 
     const remainingSlots = Math.max(0, 5 - attachments.length);
     const selectedFiles = files.slice(0, remainingSlots);
-    void Promise.allSettled(selectedFiles.map(compressImageFileToDataUrl)).then(
+    void Promise.allSettled(
+      selectedFiles.map((file) => compressImageFileToDataUrl(file))
+    ).then(
       (results) => {
         const compressedImages = results
           .filter((result): result is PromiseFulfilledResult<string> =>
