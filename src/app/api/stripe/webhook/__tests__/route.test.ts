@@ -44,6 +44,16 @@ describe("POST /api/stripe/webhook", () => {
       config: {
         quantity: 2,
         print_file: { url: "https://storage.example.com/print-file.png" },
+        print_area: "back",
+        placement: {
+          placement: "front_large",
+          area_width: 1800,
+          area_height: 2400,
+          width: 1200,
+          height: 1500,
+          top: 300,
+          left: 250,
+        },
       },
       product_selection: {
         printful_variant_id: 4011,
@@ -105,7 +115,20 @@ describe("POST /api/stripe/webhook", () => {
         {
           variant_id: 4011,
           quantity: 2,
-          files: [{ type: "front_large", url: "https://storage.example.com/print-file.png" }],
+          files: [
+            {
+              type: "back_large",
+              url: "https://storage.example.com/print-file.png",
+              position: {
+                area_width: 1800,
+                area_height: 2400,
+                width: 1200,
+                height: 1500,
+                top: 300,
+                left: 250,
+              },
+            },
+          ],
         },
       ],
       confirm: false,

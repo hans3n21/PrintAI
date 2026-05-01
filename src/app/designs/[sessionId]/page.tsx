@@ -19,7 +19,7 @@ import {
   resolvePrintDesignUrl,
 } from "@/lib/designPageGeneration";
 import { getDesignVariantCount } from "@/lib/designVariantCount";
-import { saveSessionImagesToGallery } from "@/lib/savedGallery";
+import { saveSessionImagesToGallery, readSavedGallery, writeSavedGallery } from "@/lib/savedGallery";
 import { supabase } from "@/lib/supabase";
 import type { ChatMessage, DesignAsset, ReferenceImageAsset, SloganOption } from "@/lib/types";
 import { ArrowRight, Images, RefreshCw } from "lucide-react";
@@ -44,6 +44,7 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
   const [gallerySaved, setGallerySaved] = useState(false);
   const requestedDesignsRef = useRef(false);
   const requestedSlogansRef = useRef(false);
+  const sessionTitleRequestedRef = useRef(false);
 
   const requestDesigns = useCallback(async () => {
     try {
@@ -121,6 +122,26 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
         });
         setGallerySaved(true);
         setLoading(false);
+        if (!sessionTitleRequestedRef.current) {
+          sessionTitleRequestedRef.current = true;
+          void fetch("/api/session-title", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId }),
+          })
+            .then((res) => res.json())
+            .then((payload: { title?: string }) => {
+              if (typeof payload.title === "string" && payload.title.trim()) {
+                const gallery = readSavedGallery();
+                const title = payload.title.trim();
+                const updated = gallery.map((item) =>
+                  item.sessionId === sessionId ? { ...item, sessionTitle: title } : item
+                );
+                writeSavedGallery(updated);
+              }
+            })
+            .catch(() => {});
+        }
         clearInterval(interval);
       }
     }, 1500);
@@ -136,6 +157,7 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
     setDesignAssets([]);
     setSelectedDesign(null);
     requestedDesignsRef.current = true;
+    sessionTitleRequestedRef.current = false;
     setLoading(true);
     await supabase
       .from("sessions")
@@ -157,11 +179,11 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
         selected_design_url:
           resolvePrintDesignUrl({ design_assets: designAssets }, selectedDesign) ?? selectedDesign,
         selected_slogan: selectedSlogan !== null ? slogans[selectedSlogan] : null,
-        status: "placing",
+        status: "configuring",
       })
       .eq("id", sessionId);
 
-    router.push(`/place/${sessionId}`);
+    router.push(`/configure/${sessionId}`);
   };
 
   const handleSaveGallery = () => {

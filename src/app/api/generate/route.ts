@@ -43,7 +43,7 @@ function buildFinalImagePrompt(promptData: {
   }
   parts.push(
     "Avoid: any shirt silhouette, t-shirt shape, garment mockup, fabric texture, product preview, product background, checkerboard transparency pattern, white fill background.",
-    "Safety guide: Keep the scene non-violent and playful; no weapons, blood, injury, gore, fighting, or threatening action."
+    "Safety guide: Keep the scene friendly, playful, harmless, and suitable for all ages."
   );
   return parts.join("\n");
 }

@@ -59,7 +59,7 @@ describe("POST /api/printful/mockup", () => {
 
   it("creates and polls a Printful mockup task, then stores mockup urls on the session", async () => {
     const sessionQuery = mockSessionSelect({
-      product_selection: { size: "M" },
+      product_selection: { printful_product_id: 155, size: "M" },
       config: {
         product_color: "black",
         sizes: { Ada: "M" },
@@ -76,7 +76,7 @@ describe("POST /api/printful/mockup", () => {
       },
     });
     const productQuery = mockProductSelect({
-      printful_product_id: 71,
+      printful_product_id: 155,
       print_area: {
         placement: "front_large",
         area_width: 1800,
@@ -118,7 +118,7 @@ describe("POST /api/printful/mockup", () => {
 
     expect(response.status).toBe(200);
     expect(postJsonMock).toHaveBeenCalledWith(
-      "/mockup-generator/create-task/71",
+      "/mockup-generator/create-task/155",
       {
         variant_ids: [4011, 4012],
         format: "png",
@@ -154,6 +154,105 @@ describe("POST /api/printful/mockup", () => {
       mockups: [
         { variant_id: 4011, mockup_url: "https://mockups.example.com/black.png", color: "Black" },
         { variant_id: 4012, mockup_url: "https://mockups.example.com/white.png", color: "White" },
+      ],
+    });
+  });
+
+  it("creates a preview mockup from the selected design and current placement", async () => {
+    const sessionQuery = mockSessionSelect({
+      selected_design_url: "https://storage.example.com/design.png",
+      product_selection: { printful_product_id: 155, size: "M", color: "White" },
+      config: {
+        product_color: "white",
+        placement: {
+          placement: "front_large",
+          area_width: 1800,
+          area_height: 2400,
+          width: 1100,
+          height: 1400,
+          top: 320,
+          left: 350,
+        },
+      },
+    });
+    const productQuery = mockProductSelect({
+      printful_product_id: 155,
+      print_area: {
+        placement: "front_large",
+        area_width: 1800,
+        area_height: 2400,
+      },
+      variants: [
+        { variant_id: 4011, size: "M", color: "Black" },
+        { variant_id: 4012, size: "M", color: "White" },
+      ],
+    });
+    const sessionUpdate = mockSessionUpdate();
+    fromMock.mockImplementation((table: string) => {
+      if (table === "sessions") {
+        const sessionCalls = fromMock.mock.calls.filter(([name]) => name === "sessions").length;
+        return sessionCalls === 1 ? { select: sessionQuery.select } : { update: sessionUpdate.update };
+      }
+      if (table === "printful_products") return { select: productQuery.select };
+      return {};
+    });
+    postJsonMock.mockResolvedValue({ result: { task_key: "task-preview" } });
+    getJsonMock.mockResolvedValue({
+      result: {
+        status: "completed",
+        mockups: [
+          { variant_ids: [4012], placement: "front", mockup_url: "https://mockups.example.com/white-preview.png" },
+        ],
+      },
+    });
+
+    const response = await POST(
+      new Request("https://example.com/api/printful/mockup", {
+        method: "POST",
+        body: JSON.stringify({
+          sessionId: "session-1",
+          printfulProductId: 155,
+          printfulVariantId: 4012,
+          imageUrl: "https://storage.example.com/design.png",
+          placement: {
+            placement: "front_large",
+            area_width: 1800,
+            area_height: 2400,
+            width: 1100,
+            height: 1400,
+            top: 320,
+            left: 350,
+          },
+        }),
+      })
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(postJsonMock).toHaveBeenCalledWith(
+      "/mockup-generator/create-task/155",
+      {
+        variant_ids: [4012],
+        format: "png",
+        files: [
+          {
+            placement: "front_large",
+            image_url: "https://storage.example.com/design.png",
+            position: {
+              area_width: 1800,
+              area_height: 2400,
+              width: 1100,
+              height: 1400,
+              top: 320,
+              left: 350,
+            },
+          },
+        ],
+      }
+    );
+    expect(json).toEqual({
+      mockups: [
+        { variant_id: 4012, mockup_url: "https://mockups.example.com/white-preview.png", color: "White" },
       ],
     });
   });

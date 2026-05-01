@@ -91,7 +91,7 @@ describe("buildPromptFromCreativeBrief", () => {
     expect(prompt).toContain("Nutzerfoto einer getigerten Katze");
   });
 
-  it("adds a non-violent safety guide to reduce image safety false positives", () => {
+  it("keeps safety guidance positive without enumerating disallowed content", () => {
     const brief: CreativeBrief = {
       occasion: "sonstiges",
       product: "tshirt",
@@ -107,8 +107,8 @@ describe("buildPromptFromCreativeBrief", () => {
 
     const prompt = buildPromptFromCreativeBrief(brief, null, []);
 
-    expect(prompt).toContain("Keep the scene non-violent");
-    expect(prompt).toContain("no weapons, blood, injury, gore, fighting, or threatening action");
+    expect(prompt).toContain("Keep the scene friendly, playful, harmless, and suitable for all ages");
+    expect(prompt).not.toMatch(/\b(weapons|blood|injury|gore|violence)\b/i);
   });
 
   it("keeps team shirt placement notes visible for future editor workflows", () => {
@@ -212,7 +212,7 @@ describe("buildPromptFromCreativeBrief", () => {
 
     expect(prompt).toContain("playful slapstick chase");
     expect(prompt).toContain("Zwei Leute jagen einen Brokkoli");
-    expect(prompt).toContain("not threatening");
-    expect(prompt).toContain("no violence");
+    expect(prompt).toContain("friendly and harmless");
+    expect(prompt).not.toMatch(/\b(weapons|blood|injury|gore|violence)\b/i);
   });
 });

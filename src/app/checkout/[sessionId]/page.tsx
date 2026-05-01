@@ -1,6 +1,5 @@
 "use client";
 
-import { ImageGallery } from "@/components/checkout/ImageGallery";
 import { Header } from "@/components/layout/Header";
 import { FeedbackWidget } from "@/components/notes/FeedbackWidget";
 import { Button } from "@/components/ui/button";
@@ -15,28 +14,75 @@ import {
 import { saveSessionImagesToGallery } from "@/lib/savedGallery";
 import { supabase } from "@/lib/supabase";
 import type { ReferenceImageAsset } from "@/lib/types";
-import { Images } from "lucide-react";
+import { Images, ShoppingBag } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { use, useEffect, useState } from "react";
+
+type CartLine = {
+  color: string;
+  size: string;
+  quantity: number;
+};
+
+type ProductSelection = {
+  product_color?: string;
+  size?: string;
+  quantity?: number;
+  printful_product_id?: number;
+};
+
+function capitalize(str: string) {
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function parsePrintArea(raw: unknown) {
+  if (raw === "front") return "Vorne";
+  if (raw === "back") return "Hinten";
+  if (raw === "both") return "Vorne + Hinten";
+  return typeof raw === "string" ? raw : "Vorne";
+}
+
+function parseCartLines(config: Record<string, unknown>, productSelection: ProductSelection | null): CartLine[] {
+  const raw = config.cart_lines;
+  if (Array.isArray(raw) && raw.length > 0) {
+    const lines: CartLine[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== "object") continue;
+      const o = item as Record<string, unknown>;
+      const color = typeof o.color === "string" ? o.color : "";
+      const size = typeof o.size === "string" ? o.size : "";
+      const quantity = typeof o.quantity === "number" ? o.quantity : 1;
+      if (color && size) lines.push({ color, size, quantity });
+    }
+    if (lines.length > 0) return lines;
+  }
+  // Fallback auf product_selection / config
+  return [{
+    color: String(productSelection?.product_color ?? config.product_color ?? "black"),
+    size: String(productSelection?.size ?? config.size ?? "M"),
+    quantity: Number(productSelection?.quantity ?? config.quantity ?? 1),
+  }];
+}
 
 export default function CheckoutPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
   const searchParams = useSearchParams();
   const stripeStatus = searchParams.get("stripe");
+
   const [loading, setLoading] = useState(false);
   const [designUrl, setDesignUrl] = useState<string | null>(null);
   const [designUrls, setDesignUrls] = useState<string[]>([]);
   const [referenceImages, setReferenceImages] = useState<ReferenceImageAsset[]>([]);
   const [config, setConfig] = useState<Record<string, unknown>>({});
-  const [gallerySaved, setGallerySaved] = useState(false);
-  const [printFileUrl, setPrintFileUrl] = useState<string | null>(null);
+  const [productSelection, setProductSelection] = useState<ProductSelection | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
-  const [mockupCount, setMockupCount] = useState(0);
+  const [gallerySaved, setGallerySaved] = useState(false);
 
   useEffect(() => {
     void supabase
       .from("sessions")
-      .select("selected_design_url, design_urls, reference_images, config, selected_slogan")
+      .select("selected_design_url, design_urls, reference_images, config, product_selection")
       .eq("id", sessionId)
       .single()
       .then(({ data }) => {
@@ -44,63 +90,42 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
         setDesignUrl(data.selected_design_url);
         setDesignUrls((data.design_urls ?? []) as string[]);
         setReferenceImages((data.reference_images ?? []) as ReferenceImageAsset[]);
-        const nextConfig = (data.config ?? {}) as Record<string, unknown>;
-        setConfig(nextConfig);
-        setMockupCount(Array.isArray(nextConfig.mockups) ? nextConfig.mockups.length : 0);
+        setConfig((data.config ?? {}) as Record<string, unknown>);
+        setProductSelection((data.product_selection ?? null) as ProductSelection | null);
       });
   }, [sessionId]);
+
+  const cartLines = parseCartLines(config, productSelection);
+  const totalQuantity = cartLines.reduce((sum, l) => sum + l.quantity, 0);
+  const printArea = parsePrintArea(config.print_area);
 
   const handleOrder = async () => {
     setLoading(true);
     setOrderError(null);
     try {
+      // Print-Datei erst jetzt erzeugen (placement + design → druckfertige Datei)
       const printFileRes = await fetch("/api/print-file/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId }),
       });
-      const printFileData = (await printFileRes.json()) as {
-        url?: string;
-        storage_path?: string;
-        error?: string;
-      };
+      const printFileData = (await printFileRes.json()) as { url?: string; error?: string };
       if (!printFileRes.ok) {
         throw new Error(printFileData.error ?? "Print-Datei konnte nicht erstellt werden");
       }
-      setPrintFileUrl(printFileData.url ?? null);
 
-      const existingMockups = Array.isArray(config.mockups)
-        ? (config.mockups as Array<{ variant_id: number; mockup_url: string }>)
-        : [];
-      if (existingMockups.length > 0) {
-        setMockupCount(existingMockups.length);
-      } else {
-        const mockupRes = await fetch("/api/printful/mockup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId }),
-        });
-        const mockupData = (await mockupRes.json()) as {
-          mockups?: Array<{ variant_id: number; mockup_url: string }>;
-          error?: string;
-        };
-        if (!mockupRes.ok) {
-          throw new Error(mockupData.error ?? "Printful-Mockups konnten nicht erstellt werden");
-        }
-        setMockupCount(mockupData.mockups?.length ?? 0);
-      }
-
-      const res = await fetch("/api/checkout/stripe", {
+      // Stripe Checkout starten
+      const stripeRes = await fetch("/api/checkout/stripe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId }),
       });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok) {
-        throw new Error(data.error ?? "Stripe Checkout konnte nicht gestartet werden");
+      const stripeData = (await stripeRes.json()) as { url?: string; error?: string };
+      if (!stripeRes.ok) {
+        throw new Error(stripeData.error ?? "Stripe Checkout konnte nicht gestartet werden");
       }
-      if (!data.url) throw new Error("Stripe Checkout URL fehlt");
-      window.location.href = data.url;
+      if (!stripeData.url) throw new Error("Stripe Checkout URL fehlt");
+      window.location.href = stripeData.url;
     } catch (error) {
       setOrderError(error instanceof Error ? error.message : "Bestellung fehlgeschlagen");
     } finally {
@@ -109,12 +134,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
   };
 
   const handleSaveGallery = () => {
-    saveSessionImagesToGallery({
-      sessionId,
-      designUrls,
-      referenceImages,
-      selectedDesignUrl: designUrl,
-    });
+    saveSessionImagesToGallery({ sessionId, designUrls, referenceImages, selectedDesignUrl: designUrl });
     setGallerySaved(true);
   };
 
@@ -128,108 +148,102 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
             targetType="page"
             targetRef={`checkout:${sessionId}`}
             designUrlsSnapshot={designUrls}
-            clientState={{
-              designUrl,
-              config,
-              gallerySaved,
-              loading,
-              printFileUrl,
-              mockupCount,
-            }}
+            clientState={{ designUrl, config, gallerySaved, loading }}
           />
         }
       />
       <main>
-      <PageShell>
-        <PageTitle
-          eyebrow="Checkout"
-          title="Zusammenfassung"
-          description="Prüfe deine Galerie, Auswahl und Bestelldaten vor dem Demo-Checkout."
-        />
+        <PageShell>
+          <PageTitle
+            eyebrow="Checkout"
+            title="Fast fertig!"
+            description="Prüfe deine Bestellung und schließe den Kauf ab."
+          />
 
-        <ImageGallery
-          designUrls={designUrls}
-          selectedDesignUrl={designUrl}
-          referenceImages={referenceImages}
-          title="Deine Galerie"
-        />
+          {/* Design-Vorschau */}
+          {designUrl && (
+            <AppSurface className="overflow-hidden p-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={designUrl}
+                alt="Dein Design"
+                className="mx-auto h-52 w-auto rounded-2xl object-contain"
+              />
+            </AppSurface>
+          )}
 
-        {designUrl && (
-          <AppSurface className="overflow-hidden p-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={designUrl} alt="Gewähltes Design" className="h-48 w-full rounded-3xl bg-zinc-950/40 object-contain p-4" />
+          {/* Bestellübersicht */}
+          <AppSurface className="space-y-4">
+            <p className="text-sm font-medium text-zinc-400">Deine Bestellung</p>
+
+            {cartLines.map((line, i) => (
+              <div key={i} className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {/* Farb-Kreis */}
+                  <div
+                    className="h-5 w-5 flex-shrink-0 rounded-full border border-zinc-600 shadow-sm"
+                    style={{ backgroundColor: line.color === "white" ? "#ffffff" : line.color === "black" ? "#1a1a1a" : line.color }}
+                  />
+                  <div>
+                    <p className="text-sm text-zinc-100">
+                      {capitalize(line.color)} · {line.size.toUpperCase()}
+                    </p>
+                    <p className="text-xs text-zinc-500">{line.quantity} Stück</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div className="border-t border-zinc-800/60 pt-3">
+              <div className="flex justify-between text-sm text-zinc-400">
+                <span>Druck</span>
+                <span className="text-zinc-200">{printArea}</span>
+              </div>
+              <div className="flex justify-between text-sm text-zinc-400">
+                <span>Gesamt</span>
+                <span className="text-zinc-200">{totalQuantity} Stück</span>
+              </div>
+            </div>
           </AppSurface>
-        )}
 
-        <AppSurface className="space-y-3 text-sm">
-          <div className="flex justify-between text-zinc-400">
-            <span>Produktfarbe</span>
-            <span className="capitalize text-zinc-200">{String(config.product_color ?? "-")}</span>
-          </div>
-          <div className="flex justify-between text-zinc-400">
-            <span>Druck</span>
-            <span className="text-zinc-200">{String(config.print_area ?? "-")}</span>
-          </div>
-          <div className="flex justify-between text-zinc-400">
-            <span>Menge</span>
-            <span className="text-zinc-200">{String(config.quantity ?? 1)} Stück</span>
-          </div>
-          {printFileUrl && (
-            <div className="flex justify-between text-zinc-400">
-              <span>Print-Datei</span>
-              <a
-                href={printFileUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-violet-300 hover:text-violet-200"
-              >
-                öffnen
-              </a>
-            </div>
+          {/* Stripe-Status nach Rückkehr */}
+          {stripeStatus === "success" && (
+            <AppNotice tone="success">
+              Zahlung erfolgreich übergeben. Die Printful-Bestellung wird nach Webhook-Bestätigung angelegt.
+            </AppNotice>
           )}
-          {mockupCount > 0 && (
-            <div className="flex justify-between text-zinc-400">
-              <span>Printful-Mockups</span>
-              <span className="text-zinc-200">{mockupCount} erstellt</span>
-            </div>
+          {stripeStatus === "cancel" && (
+            <AppNotice tone="warning">
+              Zahlung abgebrochen. Du kannst den Checkout jederzeit neu starten.
+            </AppNotice>
           )}
-        </AppSurface>
 
-        {stripeStatus === "success" && (
-          <AppNotice tone="success">
-            Zahlung wurde an Stripe übergeben. Sobald der Webhook bestätigt ist, wird der
-            Printful-Draft erstellt.
+          <AppNotice tone="neutral">
+            Sichere Zahlung per Stripe. Die Bestellung bei Printful wird erst nach bestätigter Zahlung aufgegeben.
           </AppNotice>
-        )}
-        {stripeStatus === "cancel" && (
-          <AppNotice tone="warning">
-            Zahlung abgebrochen. Du kannst den Checkout jederzeit erneut starten.
-          </AppNotice>
-        )}
-        <AppNotice tone="neutral">
-          Sichere Zahlung per Stripe Checkout. Die Printful-Bestellung wird erst nach bestätigter
-          Zahlung vorbereitet.
-        </AppNotice>
-        {orderError && <AppNotice tone="error">{orderError}</AppNotice>}
 
-        <Button
-          onClick={() => void handleOrder()}
-          disabled={loading}
-          className={primaryActionClassName("w-full py-6 text-base font-semibold")}
-        >
-          {loading ? "Checkout wird vorbereitet..." : "Jetzt sicher bezahlen"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleSaveGallery}
-          className={secondaryActionClassName("mx-auto flex")}
-        >
-          <Images className="mr-2 h-4 w-4" />
-          {gallerySaved ? "Alle Bilder gespeichert" : "Alle Bilder speichern"}
-        </Button>
-      </PageShell>
+          {orderError && <AppNotice tone="error">{orderError}</AppNotice>}
+
+          <Button
+            onClick={() => void handleOrder()}
+            disabled={loading}
+            className={primaryActionClassName("w-full py-6 text-base font-semibold")}
+          >
+            <ShoppingBag className="mr-2 h-5 w-5" />
+            {loading ? "Wird vorbereitet…" : "Jetzt sicher bezahlen"}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleSaveGallery}
+            className={secondaryActionClassName("mx-auto flex")}
+          >
+            <Images className="mr-2 h-4 w-4" />
+            {gallerySaved ? "Alle Bilder gespeichert" : "Alle Bilder in Galerie speichern"}
+          </Button>
+        </PageShell>
       </main>
     </div>
   );

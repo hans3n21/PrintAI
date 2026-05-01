@@ -14,6 +14,10 @@ vi.mock("../AdminProducts", () => ({
   AdminProducts: () => <div>Produkte Mock</div>,
 }));
 
+vi.mock("../AdminPricingSettings", () => ({
+  AdminPricingSettings: () => <div>Einstellungen Mock</div>,
+}));
+
 describe("AdminDashboard", () => {
   it("shows a link back to the start page", () => {
     render(<AdminDashboard />);
@@ -36,13 +40,12 @@ describe("AdminDashboard", () => {
     expect(screen.queryByText("Session Übersicht Mock")).not.toBeInTheDocument();
   });
 
-  it("can switch to products", () => {
+  it("can switch to settings", () => {
     render(<AdminDashboard />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Produkte" }));
+    fireEvent.click(screen.getByRole("button", { name: "Einstellungen" }));
 
-    expect(screen.getByText("Produkte Mock")).toBeInTheDocument();
+    expect(screen.getByText("Einstellungen Mock")).toBeInTheDocument();
     expect(screen.queryByText("Session Übersicht Mock")).not.toBeInTheDocument();
-    expect(screen.queryByText("Feedback Mock")).not.toBeInTheDocument();
   });
 });

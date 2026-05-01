@@ -64,6 +64,8 @@ export function ImageLightbox({
   const item = items[activeIndex];
 
   useEffect(() => {
+    // Reset transient viewport state when switching to another gallery item.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setZoomScale(1);
     setPanOffset({ x: 0, y: 0 });
     dragRef.current = null;

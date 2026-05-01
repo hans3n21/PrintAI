@@ -1,3 +1,5 @@
+import { trimTransparentPng } from "./trimTransparentPng";
+
 const REMOVE_BG_API_URL = "https://api.remove.bg/v1.0/removebg";
 
 function getRemoveBgApiKey() {
@@ -36,5 +38,5 @@ export async function removeBackgroundFromPng(input: Buffer): Promise<Buffer | n
     );
   }
 
-  return Buffer.from(await response.arrayBuffer());
+  return trimTransparentPng(Buffer.from(await response.arrayBuffer()));
 }

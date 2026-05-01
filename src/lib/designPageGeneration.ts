@@ -25,17 +25,38 @@ function addUrl(out: string[], seen: Set<string>, value: unknown) {
   out.push(url);
 }
 
+function normalizedUrl(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function markAssetUrlsAsSeen(seen: Set<string>, asset: DesignAssetLike) {
+  for (const value of [asset.preview_url, asset.mockup_url, asset.print_url]) {
+    const url = normalizedUrl(value);
+    if (url) seen.add(url);
+  }
+}
+
+function addPreferredAssetUrl(out: string[], asset: DesignAssetLike) {
+  const preferredUrl =
+    normalizedUrl(asset.print_url) ||
+    normalizedUrl(asset.mockup_url) ||
+    normalizedUrl(asset.preview_url);
+  if (preferredUrl && !out.includes(preferredUrl)) out.push(preferredUrl);
+}
+
 export function collectDisplayDesignUrls(data: DesignPageGenerationInput): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
-  for (const url of data.design_urls ?? []) addUrl(out, seen, url);
+
   for (const asset of data.design_assets ?? []) {
     if (!asset || typeof asset !== "object") continue;
     const designAsset = asset as DesignAssetLike;
-    addUrl(out, seen, designAsset.preview_url);
-    addUrl(out, seen, designAsset.mockup_url);
-    addUrl(out, seen, designAsset.print_url);
+
+    markAssetUrlsAsSeen(seen, designAsset);
+    addPreferredAssetUrl(out, designAsset);
   }
+
+  for (const url of data.design_urls ?? []) addUrl(out, seen, url);
   return out;
 }
 

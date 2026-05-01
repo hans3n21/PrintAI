@@ -5,6 +5,8 @@ type JsonBody = Record<string, unknown> | unknown[] | string | number | boolean 
 type RequestOptions = {
   method: "GET" | "POST";
   body?: JsonBody;
+  /** Zusätzliche Header (OAuth/Store-ID-Kontext). */
+  mergeHeaders?: Record<string, string>;
 };
 
 export class PrintfulApiError extends Error {
@@ -42,11 +44,25 @@ async function parseResponseBody(response: Response) {
   }
 }
 
-async function requestJson<T>(path: string, options: RequestOptions): Promise<T> {
-  const headers: HeadersInit = {
+function buildPrintfulHeaders(mergeHeaders?: Record<string, string>): HeadersInit {
+  const entries: Record<string, string> = {
     Accept: "application/json",
     Authorization: `Bearer ${getApiKey()}`,
   };
+  const storeId = process.env.PRINTFUL_STORE_ID?.trim();
+  if (storeId && !mergeHeaders?.["X-PF-Store-Id"] && !mergeHeaders?.["x-pf-store-id"]) {
+    entries["X-PF-Store-Id"] = storeId;
+  }
+  if (mergeHeaders) {
+    for (const [key, val] of Object.entries(mergeHeaders)) {
+      if (val.trim() !== "") entries[key] = val;
+    }
+  }
+  return entries;
+}
+
+async function requestJson<T>(path: string, options: RequestOptions): Promise<T> {
+  const headers = buildPrintfulHeaders(options.mergeHeaders);
 
   const init: RequestInit = {
     method: options.method,
@@ -76,6 +92,6 @@ export function getJson<T>(path: string): Promise<T> {
   return requestJson<T>(path, { method: "GET" });
 }
 
-export function postJson<T>(path: string, body: JsonBody): Promise<T> {
-  return requestJson<T>(path, { method: "POST", body });
+export function postJson<T>(path: string, body: JsonBody, mergeHeaders?: Record<string, string>): Promise<T> {
+  return requestJson<T>(path, { method: "POST", body, mergeHeaders });
 }

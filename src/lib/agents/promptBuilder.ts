@@ -73,7 +73,7 @@ export function buildPromptFromCreativeBrief(
   }
   parts.push(
     "Avoid: any shirt silhouette, t-shirt shape, garment mockup, fabric texture, product preview, product background, white fill background, checkerboard transparency pattern.",
-    "Safety guide: Keep the scene non-violent and playful; no weapons, blood, injury, gore, fighting, or threatening action.",
+    "Safety guide: Keep the scene friendly, playful, harmless, and suitable for all ages.",
     styleGuidance?.technicalSpecs ??
       "Technical specs: transparent background, isolated motif, centered composition, flat design, vector-like clean edges, high contrast readable typography, print-ready DTG quality."
   );
@@ -91,7 +91,7 @@ function getActionGuidance(brief: CreativeBrief): string | null {
   if (/\b(jagen|verfolgen|chase|hunt)\b/i.test(actionText)) {
     return [
       "Action fidelity: preserve the user's chase scene as a playful slapstick chase.",
-      "If wording says people jagen/verfolgen something, render it as characters running after it comedically, not threatening and no violence.",
+      "If wording says people jagen/verfolgen something, render it as characters running after it comedically, friendly and harmless.",
       "Keep the chased subject recognizable as part of the action, not as a standalone mascot replacing the scene.",
     ].join(" ");
   }

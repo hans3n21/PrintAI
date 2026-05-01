@@ -57,6 +57,7 @@ export interface ProductSelection {
   product: Product;
   product_color: ProductColor;
   quantity: number;
+  printful_product_id?: number;
   printful_variant_id?: number;
   size?: string;
   color?: string;

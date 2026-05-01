@@ -57,6 +57,16 @@ describe("POST /api/order", () => {
       config: {
         quantity: 3,
         print_file: { url: "https://storage.example.com/print-file.png" },
+        print_area: "both",
+        placement: {
+          placement: "front_large",
+          area_width: 1800,
+          area_height: 2400,
+          width: 1200,
+          height: 1500,
+          top: 300,
+          left: 250,
+        },
       },
       product_selection: {
         printful_variant_id: 4011,
@@ -104,6 +114,26 @@ describe("POST /api/order", () => {
             {
               type: "front_large",
               url: "https://storage.example.com/print-file.png",
+              position: {
+                area_width: 1800,
+                area_height: 2400,
+                width: 1200,
+                height: 1500,
+                top: 300,
+                left: 250,
+              },
+            },
+            {
+              type: "back_large",
+              url: "https://storage.example.com/print-file.png",
+              position: {
+                area_width: 1800,
+                area_height: 2400,
+                width: 1200,
+                height: 1500,
+                top: 300,
+                left: 250,
+              },
             },
           ],
         },

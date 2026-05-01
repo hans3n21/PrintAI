@@ -1,32 +1,25 @@
 "use client";
 
+// DEPRECATED: Der Place-Schritt wurde in /configure/ integriert.
+// Diese Route bleibt für bestehende Sessions mit status="placing" erreichbar,
+// wird aber im neuen Flow nicht mehr angesteuert.
+
 import { Header } from "@/components/layout/Header";
 import { FeedbackWidget } from "@/components/notes/FeedbackWidget";
-import { PlacementEditor } from "@/components/place/PlacementEditor";
+import {
+  FALLBACK_PLACEMENT_PRODUCT,
+  PlacementEditor,
+} from "@/components/place/PlacementEditor";
 import { AppNotice, PageShell, PageTitle } from "@/components/ui/appSurface";
 import { collectDisplayDesignUrls } from "@/lib/designPageGeneration";
+import { withPinnedShopPrintfulProductId } from "@/lib/productSelection";
 import { supabase } from "@/lib/supabase";
+import type { ProductSelection } from "@/lib/types";
 import type { ComponentProps } from "react";
 import { useEffect, useState } from "react";
 
 type PlacementProduct = ComponentProps<typeof PlacementEditor>["product"];
 type PlacementConfig = ComponentProps<typeof PlacementEditor>["initialConfig"];
-
-const BELLA_CANVAS_3001_PRINTFUL_ID = 71;
-const FALLBACK_PRODUCT: PlacementProduct = {
-  id: "fallback-bella-canvas-3001",
-  title: "Bella Canvas 3001 Vorschau",
-  variants: [
-    { variant_id: 0, color: "Black", color_hex: "#111111" },
-    { variant_id: 1, color: "White", color_hex: "#ffffff" },
-  ],
-  print_area: {
-    placement: "front_large",
-    area_width: 1800,
-    area_height: 2400,
-  },
-  mockup_templates: [],
-};
 
 export function PlacePageClient({ sessionId }: { sessionId: string }) {
   const [designUrl, setDesignUrl] = useState<string | null>(null);
@@ -40,22 +33,27 @@ export function PlacePageClient({ sessionId }: { sessionId: string }) {
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
-          const [{ data: session, error: sessionError }, { data: productRows, error: productError }] =
-            await Promise.all([
-              supabase
-                .from("sessions")
-                .select("selected_design_url, design_urls, design_assets, config")
-                .eq("id", sessionId)
-                .single(),
-              supabase
-                .from("printful_products")
-                .select("id, title, variants, print_area, mockup_templates")
-                .eq("printful_product_id", BELLA_CANVAS_3001_PRINTFUL_ID)
-                .eq("is_active", true)
-                .limit(1),
-            ]);
+          const { data: session, error: sessionError } = await supabase
+            .from("sessions")
+            .select("selected_design_url, design_urls, design_assets, config, product_selection")
+            .eq("id", sessionId)
+            .single();
 
           if (sessionError) throw new Error(sessionError.message);
+          const productSelection = session?.product_selection as ProductSelection | null;
+          const selectedPrintfulProductId = productSelection?.printful_product_id;
+          let productQuery = supabase
+            .from("printful_products")
+            .select("id, printful_product_id, title, variants, product_images, print_area, mockup_templates")
+            .eq("is_active", true);
+          if (Number.isInteger(selectedPrintfulProductId) && selectedPrintfulProductId > 0) {
+            productQuery = productQuery.eq("printful_product_id", selectedPrintfulProductId);
+          } else {
+            productQuery = productQuery
+              .order("is_primary", { ascending: false })
+              .order("sort_order", { ascending: true, nullsFirst: false });
+          }
+          const { data: productRows, error: productError } = await productQuery.limit(1);
           if (productError) throw new Error(productError.message);
           const selectedDesignUrl =
             session?.selected_design_url ?? collectDisplayDesignUrls(session ?? {})[0];
@@ -63,7 +61,28 @@ export function PlacePageClient({ sessionId }: { sessionId: string }) {
             throw new Error("Kein ausgewähltes Design für diese Session gefunden.");
           }
           const activeProduct = productRows?.[0] as PlacementProduct | undefined;
-          const placementProduct = activeProduct ?? FALLBACK_PRODUCT;
+          const placementProduct = activeProduct ?? FALLBACK_PLACEMENT_PRODUCT;
+
+          const rowPid = (productRows?.[0] as { printful_product_id?: number } | undefined)
+            ?.printful_product_id;
+          const resolvedRowPid =
+            typeof rowPid === "number" && Number.isFinite(rowPid) && rowPid > 0 ? rowPid : 0;
+
+          const hasPinnedPrintfulProductId =
+            typeof productSelection?.printful_product_id === "number" &&
+            Number.isInteger(productSelection.printful_product_id) &&
+            productSelection.printful_product_id > 0;
+
+          if (resolvedRowPid > 0 && !hasPinnedPrintfulProductId) {
+            const nextSelection = withPinnedShopPrintfulProductId(productSelection, resolvedRowPid);
+            await supabase
+              .from("sessions")
+              .update({
+                product_selection: nextSelection,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", sessionId);
+          }
 
           setDesignUrl(selectedDesignUrl);
           setConfig((session.config ?? {}) as PlacementConfig);
@@ -71,7 +90,7 @@ export function PlacePageClient({ sessionId }: { sessionId: string }) {
           setSetupWarning(
             activeProduct
               ? null
-              : "Kein aktives Bella Canvas 3001 Produkt gefunden. Du siehst vorerst eine einfache Vorschau; für echte Mockups bitte im Admin-Bereich den Printful-Katalog synchronisieren und das Produkt aktivieren."
+              : "Kein aktives Printful-Produkt gefunden. Du siehst vorerst eine einfache Vorschau; bitte im Admin-Bereich ein Produkt integrieren und aktivieren."
           );
 
           if (!session?.selected_design_url) {

@@ -6,7 +6,6 @@ import {
   AppSurface,
   secondaryActionClassName,
 } from "@/components/ui/appSurface";
-import { collectDisplayDesignUrls } from "@/lib/designPageGeneration";
 import type { ChatMessage, SessionStatus } from "@/lib/types";
 import { Images } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -55,6 +54,12 @@ type MediaItem = {
   label: string;
   description: string;
   kind: "design" | "reference";
+};
+
+type AdminDesignAssetLike = {
+  preview_url?: unknown;
+  mockup_url?: unknown;
+  print_url?: unknown;
 };
 
 type LightboxTab = "chat" | "infos" | "slogans" | "technik";
@@ -189,8 +194,32 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
   );
 }
 
+function addAdminMediaUrl(out: string[], seen: Set<string>, value: unknown) {
+  if (typeof value !== "string") return;
+  const url = value.trim();
+  if (!url || seen.has(url)) return;
+  seen.add(url);
+  out.push(url);
+}
+
+function collectAdminDesignUrls(detail: AdminSessionDetail) {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  for (const url of detail.design_urls) addAdminMediaUrl(out, seen, url);
+  for (const asset of detail.design_assets) {
+    if (!asset || typeof asset !== "object") continue;
+    const designAsset = asset as AdminDesignAssetLike;
+    addAdminMediaUrl(out, seen, designAsset.print_url);
+    addAdminMediaUrl(out, seen, designAsset.mockup_url);
+    addAdminMediaUrl(out, seen, designAsset.preview_url);
+  }
+
+  return out;
+}
+
 function buildMediaItems(detail: AdminSessionDetail): MediaItem[] {
-  const designUrls = collectDisplayDesignUrls(detail);
+  const designUrls = collectAdminDesignUrls(detail);
   const designs = designUrls.map((url, index) => ({
     url,
     label: `Design ${index + 1}`,

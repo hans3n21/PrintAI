@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { mergeOnboardingWithProductSelection } from "../productSelection";
+import {
+  mergeOnboardingWithProductSelection,
+  withPinnedShopPrintfulProductId,
+} from "../productSelection";
 import type { OnboardingData, ProductSelection } from "../types";
 
 const onboarding: OnboardingData = {
@@ -36,5 +39,24 @@ describe("mergeOnboardingWithProductSelection", () => {
 
     expect(result.product).toBe("tshirt");
     expect(result.group_size).toBe(18);
+  });
+});
+
+describe("withPinnedShopPrintfulProductId", () => {
+  it("sets printful_product_id when missing", () => {
+    const result = withPinnedShopPrintfulProductId(
+      { product: "tshirt", product_color: "black", quantity: 2 },
+      71
+    );
+    expect(result.printful_product_id).toBe(71);
+    expect(result.quantity).toBe(2);
+  });
+
+  it("does not override an existing printful_product_id", () => {
+    const result = withPinnedShopPrintfulProductId(
+      { product: "tshirt", product_color: "black", quantity: 1, printful_product_id: 200 },
+      71
+    );
+    expect(result.printful_product_id).toBe(200);
   });
 });

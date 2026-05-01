@@ -28,22 +28,25 @@ describe("getDesignPageGenerationState", () => {
     expect(state.shouldRequestSlogans).toBe(true);
   });
 
-  it("collects all displayable designs from urls and structured assets", () => {
+  it("collects one preferred display URL per structured asset", () => {
     expect(
       collectDisplayDesignUrls({
         design_urls: ["https://example.com/legacy.png"],
         design_assets: [
-          { preview_url: "https://example.com/asset-1.png" },
-          { mockup_url: "https://example.com/mockup.png" },
-          { print_url: "https://example.com/print.png" },
+          {
+            preview_url: "https://example.com/asset-1-preview.png",
+            print_url: "https://example.com/asset-1-print.png",
+          },
+          {
+            preview_url: "https://example.com/asset-2-preview.png",
+          },
           { preview_url: "https://example.com/legacy.png" },
         ],
       })
     ).toEqual([
+      "https://example.com/asset-1-print.png",
+      "https://example.com/asset-2-preview.png",
       "https://example.com/legacy.png",
-      "https://example.com/asset-1.png",
-      "https://example.com/mockup.png",
-      "https://example.com/print.png",
     ]);
   });
 

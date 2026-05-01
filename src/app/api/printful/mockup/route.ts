@@ -2,7 +2,6 @@ import { getJson, postJson } from "@/lib/printful/client";
 import { supabaseAdmin } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 
-const BELLA_CANVAS_3001_PRINTFUL_ID = 71;
 const MAX_POLL_ATTEMPTS = 8;
 
 type PlacementConfig = {
@@ -28,7 +27,16 @@ type SessionConfig = Record<string, unknown> & {
   mockups?: MockupResult[];
 };
 
+type MockupRequestBody = {
+  sessionId?: unknown;
+  printfulProductId?: unknown;
+  printfulVariantId?: unknown;
+  imageUrl?: unknown;
+  placement?: unknown;
+};
+
 type SessionProductSelection = {
+  printful_product_id?: number;
   printful_variant_id?: number;
   size?: string;
   color?: string;
@@ -95,13 +103,17 @@ function getSelectedSize(config: SessionConfig, productSelection?: SessionProduc
   return typeof firstSize === "string" ? firstSize.trim().toUpperCase() : "M";
 }
 
-function selectVariantIds(variants: ProductVariant[], size: string) {
-  const wantedColors = new Set(["black", "white"]);
+function selectVariantIds(
+  variants: ProductVariant[],
+  size: string,
+  productSelection?: SessionProductSelection | null
+) {
+  const selectedColor = productSelection?.color?.trim().toLowerCase();
   return variants
     .filter(
       (variant) =>
         variant.size?.trim().toUpperCase() === size &&
-        wantedColors.has(variant.color?.trim().toLowerCase() ?? "")
+        (!selectedColor || variant.color?.trim().toLowerCase() === selectedColor)
     )
     .sort((a, b) => (a.color ?? "").localeCompare(b.color ?? ""))
     .map((variant) => variant.variant_id);
@@ -119,6 +131,19 @@ function buildPosition(config: SessionConfig, product: PrintfulProduct) {
     top: placement.top ?? 360,
     left: placement.left ?? 270,
   };
+}
+
+function isPlacementConfig(value: unknown): value is PlacementConfig {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function placementFromRequest(value: unknown): PlacementConfig | undefined {
+  if (!isPlacementConfig(value)) return undefined;
+  return value;
+}
+
+function numberFromRequest(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 function normalizeMockups(
@@ -162,9 +187,49 @@ async function pollMockupTask(taskKey: string, variantsById: Map<number, Product
   throw new Error("Printful mockup task timed out");
 }
 
+async function loadSessionProduct(productSelection?: SessionProductSelection | null) {
+  const selectedPrintfulProductId = productSelection?.printful_product_id;
+  if (Number.isInteger(selectedPrintfulProductId) && selectedPrintfulProductId > 0) {
+    return supabaseAdmin
+      .from("printful_products")
+      .select("printful_product_id, variants, print_area")
+      .eq("printful_product_id", selectedPrintfulProductId)
+      .eq("is_active", true)
+      .single();
+  }
+
+  return supabaseAdmin
+    .from("printful_products")
+    .select("printful_product_id, variants, print_area")
+    .eq("is_active", true)
+    .order("is_primary", { ascending: false })
+    .order("sort_order", { ascending: true, nullsFirst: false })
+    .limit(1)
+    .single();
+}
+
+async function loadPrintfulProduct(productId: number | undefined, productSelection?: SessionProductSelection | null) {
+  const selectedPrintfulProductId =
+    productId ??
+    (Number.isInteger(productSelection?.printful_product_id) && productSelection!.printful_product_id! > 0
+      ? productSelection!.printful_product_id
+      : undefined);
+  if (selectedPrintfulProductId) {
+    return supabaseAdmin
+      .from("printful_products")
+      .select("printful_product_id, variants, print_area")
+      .eq("printful_product_id", selectedPrintfulProductId)
+      .eq("is_active", true)
+      .single();
+  }
+
+  return loadSessionProduct(productSelection);
+}
+
 export async function POST(request: Request) {
   try {
-    const { sessionId } = (await request.json()) as { sessionId?: unknown };
+    const body = (await request.json()) as MockupRequestBody;
+    const { sessionId } = body;
     if (typeof sessionId !== "string" || !sessionId.trim()) {
       return NextResponse.json({ error: "sessionId required" }, { status: 400 });
     }
@@ -172,7 +237,7 @@ export async function POST(request: Request) {
     const normalizedSessionId = sessionId.trim();
     const { data: session, error: sessionError } = await supabaseAdmin
       .from("sessions")
-      .select("config, product_selection")
+      .select("selected_design_url, config, product_selection")
       .eq("id", normalizedSessionId)
       .single();
 
@@ -184,17 +249,19 @@ export async function POST(request: Request) {
     }
 
     const config = (session.config ?? {}) as SessionConfig;
-    const imageUrl = config.print_file?.url;
+    const imageUrl =
+      (typeof body.imageUrl === "string" && body.imageUrl.trim()) ||
+      config.print_file?.url ||
+      (typeof session.selected_design_url === "string" ? session.selected_design_url : undefined);
     if (!imageUrl) {
-      return NextResponse.json({ error: "config.print_file.url missing" }, { status: 400 });
+      return NextResponse.json({ error: "imageUrl or config.print_file.url missing" }, { status: 400 });
     }
 
-    const { data: product, error: productError } = await supabaseAdmin
-      .from("printful_products")
-      .select("printful_product_id, variants, print_area")
-      .eq("printful_product_id", BELLA_CANVAS_3001_PRINTFUL_ID)
-      .eq("is_active", true)
-      .single();
+    const productSelection = session.product_selection as SessionProductSelection | null;
+    const { data: product, error: productError } = await loadPrintfulProduct(
+      numberFromRequest(body.printfulProductId),
+      productSelection
+    );
 
     if (productError || !product) {
       return NextResponse.json(
@@ -204,17 +271,24 @@ export async function POST(request: Request) {
     }
 
     const normalizedProduct = product as PrintfulProduct;
-    const productSelection = session.product_selection as SessionProductSelection | null;
-    const position = buildPosition(config, normalizedProduct);
+    const requestPlacement = placementFromRequest(body.placement);
+    const position = buildPosition(
+      requestPlacement ? ({ ...config, placement: requestPlacement } as SessionConfig) : config,
+      normalizedProduct
+    );
     const variantsById = new Map(
       (normalizedProduct.variants ?? []).map((variant) => [variant.variant_id, variant])
     );
-    const variantIds = selectVariantIds(
-      normalizedProduct.variants ?? [],
-      getSelectedSize(config, productSelection)
-    );
+    const requestedVariantId = numberFromRequest(body.printfulVariantId);
+    const variantIds = requestedVariantId
+      ? [requestedVariantId]
+      : selectVariantIds(
+          normalizedProduct.variants ?? [],
+          getSelectedSize(config, productSelection),
+          productSelection
+        );
     if (variantIds.length === 0) {
-      return NextResponse.json({ error: "No matching Black/White variants found" }, { status: 400 });
+      return NextResponse.json({ error: "No matching variants found" }, { status: 400 });
     }
 
     const createResponse = await postJson<CreateTaskResponse>(

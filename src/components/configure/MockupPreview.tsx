@@ -44,12 +44,13 @@ export function MockupPreview({
   return (
     <div className="flex flex-col items-center gap-3 rounded-[2rem] border border-zinc-700/70 bg-zinc-800/80 p-5 shadow-2xl shadow-black/25 ring-1 ring-white/5 backdrop-blur">
       {selectedMockup ? (
-        <div className="w-full max-w-sm overflow-hidden rounded-[1.75rem] bg-zinc-950 shadow-2xl shadow-black/30 ring-1 ring-white/10">
+        <div className="flex w-full min-w-0 max-w-sm justify-center overflow-hidden rounded-[1.75rem] bg-zinc-950 shadow-2xl shadow-black/30 ring-1 ring-white/10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={selectedMockup.mockup_url}
             alt="Printful Mockup"
-            className="h-auto w-full object-contain"
+            decoding="async"
+            className="mx-auto block h-auto max-h-[min(85vh,720px)] w-auto max-w-full object-contain"
           />
         </div>
       ) : (

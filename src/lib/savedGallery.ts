@@ -8,11 +8,13 @@ export type SavedGalleryItem = {
   sessionId: string;
   selected?: boolean;
   savedAt: string;
+  /** KI- oder Nutzer-Titel für die gesamte Session (Galerie). */
+  sessionTitle?: string;
 };
 
 export const SAVED_GALLERY_KEY = "printai_saved_gallery_v1";
 
-type SaveSessionImagesInput = {
+export type SaveSessionImagesInput = {
   sessionId: string;
   designUrls: string[];
   referenceImages?: ReferenceImageAsset[];
@@ -78,11 +80,21 @@ export function writeSavedGallery(
   storage.setItem(SAVED_GALLERY_KEY, JSON.stringify(items));
 }
 
-export function saveSessionImagesToGallery(input: SaveSessionImagesInput) {
-  const incoming = buildGalleryItems(input);
-  if (incoming.length === 0) return readSavedGallery();
-  const merged = mergeGalleryItems(readSavedGallery(), incoming);
-  writeSavedGallery(merged);
+export function saveSessionImagesToGallery(
+  input: SaveSessionImagesInput,
+  storage: Pick<Storage, "getItem" | "setItem"> = localStorage
+) {
+  const existing = readSavedGallery(storage);
+  const existingTitle = existing.find((i) => i.sessionId === input.sessionId)?.sessionTitle;
+
+  const incoming = buildGalleryItems(input).map((item) => ({
+    ...item,
+    sessionTitle: existingTitle,
+  }));
+
+  if (incoming.length === 0) return existing;
+  const merged = mergeGalleryItems(existing, incoming);
+  writeSavedGallery(merged, storage);
   return merged;
 }
 

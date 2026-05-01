@@ -12,6 +12,40 @@ export function normalizeQuantity(value: unknown): number {
   return Math.min(999, Math.max(1, Math.round(n)));
 }
 
+/** Session mit dem im Shop aktiven Printful-Produkt verknüpfen (nur wenn noch keine gültige ID gesetzt ist). */
+export function withPinnedShopPrintfulProductId(
+  selection: ProductSelection | null | undefined,
+  printful_product_id: number
+): ProductSelection {
+  const existingPid = selection?.printful_product_id;
+  if (
+    typeof existingPid === "number" &&
+    Number.isInteger(existingPid) &&
+    existingPid > 0
+  ) {
+    return selection!;
+  }
+
+  const base: ProductSelection = {
+    product: selection?.product ?? DEFAULT_PRODUCT_SELECTION.product,
+    product_color: selection?.product_color ?? DEFAULT_PRODUCT_SELECTION.product_color,
+    quantity: normalizeQuantity(selection?.quantity),
+    printful_product_id,
+  };
+
+  if (typeof selection?.printful_variant_id === "number" && selection.printful_variant_id > 0) {
+    base.printful_variant_id = selection.printful_variant_id;
+  }
+  if (typeof selection?.size === "string" && selection.size.trim()) {
+    base.size = selection.size.trim();
+  }
+  if (typeof selection?.color === "string" && selection.color.trim()) {
+    base.color = selection.color.trim().toLowerCase();
+  }
+
+  return base;
+}
+
 export function mergeOnboardingWithProductSelection(
   data: OnboardingData,
   selection: ProductSelection | null | undefined

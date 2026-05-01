@@ -1,13 +1,21 @@
 import { postJson } from "@/lib/printful/client";
+import { orderFilePlacements } from "@/lib/printful/placements";
 import { supabaseAdmin } from "@/lib/supabase";
 
 type SessionOrderConfig = {
   quantity?: number;
+  print_area?: "front" | "back" | "both" | string;
   print_file?: {
     url?: string;
   };
   placement?: {
     placement?: string;
+    area_width?: number;
+    area_height?: number;
+    width?: number;
+    height?: number;
+    top?: number;
+    left?: number;
   };
 };
 
@@ -48,6 +56,38 @@ function normalizePrintfulOrderId(value: number | string) {
   return typeof value === "number" ? value : Number(value);
 }
 
+function printfulFilePosition(config: SessionOrderConfig) {
+  const placement = config.placement;
+  if (
+    typeof placement?.area_width !== "number" ||
+    typeof placement.area_height !== "number" ||
+    typeof placement.width !== "number" ||
+    typeof placement.height !== "number" ||
+    typeof placement.top !== "number" ||
+    typeof placement.left !== "number"
+  ) {
+    return undefined;
+  }
+
+  return {
+    area_width: placement.area_width,
+    area_height: placement.area_height,
+    width: placement.width,
+    height: placement.height,
+    top: placement.top,
+    left: placement.left,
+  };
+}
+
+function buildPrintfulFiles(config: SessionOrderConfig, printFileUrl: string) {
+  const position = printfulFilePosition(config);
+  return orderFilePlacements(config.print_area, config.placement?.placement ?? "front_large").map((type) => ({
+    type,
+    url: printFileUrl,
+    ...(position ? { position } : {}),
+  }));
+}
+
 export async function createPrintfulDraftOrderForSession(
   normalizedSessionId: string,
   stripePayment?: StripePaymentDetails
@@ -72,19 +112,14 @@ export async function createPrintfulDraftOrderForSession(
   }
 
   const quantity = normalizeQuantity(config.quantity);
-  const fileType = config.placement?.placement ?? "front_large";
+  const files = buildPrintfulFiles(config, printFileUrl);
   const printfulOrder = await postJson<PrintfulOrderResponse>("/orders", {
     recipient: STUB_RECIPIENT,
     items: [
       {
         variant_id: variantId,
         quantity,
-        files: [
-          {
-            type: fileType,
-            url: printFileUrl,
-          },
-        ],
+        files,
       },
     ],
     confirm: false,
@@ -102,7 +137,8 @@ export async function createPrintfulDraftOrderForSession(
     item: {
       variant_id: variantId,
       quantity,
-      file_type: fileType,
+      file_type: files.map((file) => file.type).join(","),
+      files,
       print_file_url: printFileUrl,
     },
     ...(stripePayment

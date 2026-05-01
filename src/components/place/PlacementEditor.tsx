@@ -7,9 +7,11 @@ import {
   primaryActionClassName,
   secondaryActionClassName,
 } from "@/components/ui/appSurface";
+import { choosePrintfulPreview, placementMatches } from "@/lib/printful/productPreviewImages";
 import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 
 type Placement = {
   placement: string;
@@ -30,6 +32,7 @@ type MockupTemplate = {
   catalog_variant_ids?: number[] | null;
   image_url?: string | null;
   background_url?: string | null;
+  background_color?: string | null;
   print_area_width?: number | null;
   print_area_height?: number | null;
   print_area_left?: number | null;
@@ -38,16 +41,61 @@ type MockupTemplate = {
   template_height?: number | null;
 };
 
-type PrintfulProduct = {
+type ProductImage = {
+  catalog_variant_id?: number | null;
+  color?: string | null;
+  color_hex?: string | null;
+  placement?: string | null;
+  image_url?: string | null;
+  background_color?: string | null;
+  background_image?: string | null;
+  mockup_style_id?: number | null;
+};
+
+type ProductColorAsset = {
+  id?: string;
+  color_slug?: string | null;
+  placement?: string | null;
+  image_url?: string | null;
+  is_preferred?: boolean | null;
+  template_width?: number | null;
+  template_height?: number | null;
+  print_area_left?: number | null;
+  print_area_top?: number | null;
+  print_area_width?: number | null;
+  print_area_height?: number | null;
+};
+
+export type PrintfulProductForEditor = {
   id: string;
   title: string;
   variants: PrintfulVariant[] | null;
+  product_images?: ProductImage[] | null;
+  color_assets?: ProductColorAsset[] | null;
   print_area: {
     placement?: string | null;
     area_width?: number | null;
     area_height?: number | null;
   } | null;
   mockup_templates: MockupTemplate[] | null;
+};
+
+type PrintfulProduct = PrintfulProductForEditor;
+
+export const FALLBACK_PLACEMENT_PRODUCT: PrintfulProduct = {
+  id: "fallback-bella-canvas-3001",
+  title: "Bella Canvas 3001 Vorschau",
+  variants: [
+    { variant_id: 0, color: "Black", color_hex: "#111111" },
+    { variant_id: 1, color: "White", color_hex: "#ffffff" },
+  ],
+  print_area: {
+    placement: "front_large",
+    area_width: 1800,
+    area_height: 2400,
+  },
+  product_images: [],
+  mockup_templates: [],
 };
 
 type SessionConfigWithPlacement = Record<string, unknown> & {
@@ -57,7 +105,11 @@ type SessionConfigWithPlacement = Record<string, unknown> & {
 
 type DragMode = "move" | "resize";
 
-const COLOR_OPTIONS = ["Black", "White"] as const;
+const FALLBACK_SWATCH_COLOR_OPTIONS: Array<{ id: string; label: string; hex: string }> = [
+  { id: "black", label: "Black", hex: "#1a1a1a" },
+  { id: "white", label: "White", hex: "#ffffff" },
+];
+
 const FALLBACK_PRINT_AREA_STYLE = {
   left: "54px",
   top: "133px",
@@ -69,8 +121,13 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function normalizeColor(value: string | undefined) {
-  return value?.trim().toLowerCase() === "white" ? "white" : "black";
+function normalizeProductColorId(value: string | undefined) {
+  const v = value?.trim().toLowerCase();
+  return v && v.length > 0 ? v : "black";
+}
+
+function colorSlug(value: string | null | undefined) {
+  return value?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ?? "";
 }
 
 function defaultPlacement(areaWidth: number, areaHeight: number, placement: string): Placement {
@@ -135,25 +192,6 @@ function resizePlacementProportionally(
   };
 }
 
-function getTemplateImage(template: MockupTemplate | undefined) {
-  return template?.image_url ?? template?.background_url ?? null;
-}
-
-function chooseTemplateImage(
-  templates: MockupTemplate[],
-  variants: PrintfulVariant[],
-  color: string,
-  placement: string
-) {
-  const renderableTemplate = chooseTemplate(
-    templates.filter((template) => getTemplateImage(template)),
-    variants,
-    color,
-    placement
-  );
-  return getTemplateImage(renderableTemplate);
-}
-
 function hasTemplatePrintArea(template: MockupTemplate | undefined) {
   return (
     template?.template_width != null &&
@@ -165,31 +203,19 @@ function hasTemplatePrintArea(template: MockupTemplate | undefined) {
   );
 }
 
-function templateMatchesColor(template: MockupTemplate, variants: PrintfulVariant[], color: string) {
-  const ids = template.catalog_variant_ids ?? [];
-  if (ids.length === 0) return false;
-  return variants.some(
-    (variant) =>
-      ids.includes(variant.variant_id) &&
-      variant.color?.trim().toLowerCase() === color.toLowerCase()
-  );
-}
+function editorStageBackgroundColor(image: ProductImage | undefined) {
+  const color = image?.background_color?.trim();
+  if (!color) return undefined;
 
-function chooseTemplate(
-  templates: MockupTemplate[],
-  variants: PrintfulVariant[],
-  color: string,
-  placement: string
-) {
-  return (
-    templates.find(
-      (template) =>
-        template.placement === placement && templateMatchesColor(template, variants, color)
-    ) ??
-    templates.find((template) => templateMatchesColor(template, variants, color)) ??
-    templates.find((template) => template.placement === placement) ??
-    templates[0]
-  );
+  const hex = /^#?([0-9a-f]{6})$/i.exec(color);
+  if (!hex) return color;
+
+  const value = hex[1];
+  const red = Number.parseInt(value.slice(0, 2), 16);
+  const green = Number.parseInt(value.slice(2, 4), 16);
+  const blue = Number.parseInt(value.slice(4, 6), 16);
+  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+  return luminance > 0.82 ? undefined : color;
 }
 
 function printAreaStyle(template: MockupTemplate | undefined) {
@@ -206,11 +232,51 @@ function printAreaStyle(template: MockupTemplate | undefined) {
   };
 }
 
+function assetPrintAreaStyle(asset: ProductColorAsset | undefined) {
+  if (
+    asset?.template_width == null ||
+    asset.template_height == null ||
+    asset.print_area_left == null ||
+    asset.print_area_top == null ||
+    asset.print_area_width == null ||
+    asset.print_area_height == null
+  ) {
+    return undefined;
+  }
+
+  return {
+    left: `${((asset.print_area_left / asset.template_width) * 100).toFixed(4)}%`,
+    top: `${((asset.print_area_top / asset.template_height) * 100).toFixed(4)}%`,
+    width: `${((asset.print_area_width / asset.template_width) * 100).toFixed(4)}%`,
+    height: `${((asset.print_area_height / asset.template_height) * 100).toFixed(4)}%`,
+  };
+}
+
+function resolveFallbackHex(color: string) {
+  const normalized = color.trim().toLowerCase();
+  if (normalized === "white") return "#f4f4f5";
+  if (normalized === "black") return "#111113";
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalized)) {
+    return normalized.length === 4
+      ? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
+      : normalized;
+  }
+  return "#111113";
+}
+
+function hexLuminance(hex: string) {
+  const value = hex.replace("#", "");
+  const red = Number.parseInt(value.slice(0, 2), 16);
+  const green = Number.parseInt(value.slice(2, 4), 16);
+  const blue = Number.parseInt(value.slice(4, 6), 16);
+  return (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+}
+
 function FallbackShirtMockup({ color }: { color: string }) {
-  const isWhite = color === "white";
-  const shirtFill = isWhite ? "#f4f4f5" : "#111113";
-  const shirtStroke = isWhite ? "#d4d4d8" : "#27272a";
-  const collarFill = isWhite ? "#e4e4e7" : "#050505";
+  const shirtFill = resolveFallbackHex(color);
+  const isLight = hexLuminance(shirtFill) > 0.78;
+  const shirtStroke = isLight ? "#d4d4d8" : "#27272a";
+  const collarFill = isLight ? "#e4e4e7" : "#050505";
 
   return (
     <div
@@ -248,7 +314,7 @@ function FallbackShirtMockup({ color }: { color: string }) {
         <path
           d="M188 292 C226 312 334 312 372 292"
           fill="none"
-          stroke={isWhite ? "#e4e4e7" : "#18181b"}
+          stroke={isLight ? "#e4e4e7" : "#18181b"}
           strokeWidth="5"
           opacity="0.8"
         />
@@ -257,25 +323,114 @@ function FallbackShirtMockup({ color }: { color: string }) {
   );
 }
 
+function ProductMockupPreview({ src, title }: { src: string; title: string }) {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={title}
+        draggable={false}
+        className="absolute inset-0 block h-full w-full select-none object-cover object-[center_30%]"
+      />
+    </div>
+  );
+}
+
+export type PlacementEditorColorOption = { id: string; label: string; hex: string };
+
+export type PlacementEditorProps = {
+  sessionId: string;
+  designUrl: string;
+  initialConfig: SessionConfigWithPlacement;
+  product: PrintfulProduct;
+  onSaved?: (nextConfig: Record<string, unknown>) => void;
+  hideNavigation?: boolean;
+  /** Druckfarben mit Hex für Swatches; sonst Fallback Schwarz/Weiß. */
+  colorOptions?: PlacementEditorColorOption[];
+  /** Wenn gesetzt: Farbe von aussen (z. B. ColorPicker), keine Schwarz/Weiß-Buttons. */
+  colorOverride?: string;
+  /** Farbwahl an Parent melden (z. B. ColorPicker / Warenkorb-Zeilen). */
+  onColorChange?: (color: string) => void;
+};
+
 export function PlacementEditor({
   sessionId,
   designUrl,
   initialConfig,
   product,
-}: {
-  sessionId: string;
-  designUrl: string;
-  initialConfig: SessionConfigWithPlacement;
-  product: PrintfulProduct;
-}) {
+  onSaved,
+  hideNavigation = false,
+  colorOptions,
+  colorOverride,
+  onColorChange,
+}: PlacementEditorProps) {
   const router = useRouter();
   const placementName = product.print_area?.placement ?? "front_large";
   const areaWidth = product.print_area?.area_width ?? 1800;
   const areaHeight = product.print_area?.area_height ?? 2400;
-  const [color, setColor] = useState(normalizeColor(initialConfig.product_color));
+  const resolvedColorOptions = useMemo(
+    () => colorOptions ?? FALLBACK_SWATCH_COLOR_OPTIONS,
+    [colorOptions]
+  );
+  const [color, setColor] = useState(() =>
+    normalizeProductColorId(initialConfig.product_color)
+  );
+  const isColorControlled = colorOverride !== undefined;
+  const effectiveColor =
+    isColorControlled
+      ? String(colorOverride).trim().toLowerCase() || normalizeProductColorId(color)
+      : color;
+  const hideColorButtons = isColorControlled;
+
+  const initialConfigRef = useRef(initialConfig);
+  const onSavedRef = useRef(onSaved);
+
+  useEffect(() => {
+    initialConfigRef.current = initialConfig;
+  }, [initialConfig]);
+
+  useEffect(() => {
+    onSavedRef.current = onSaved;
+  }, [onSaved]);
+
   const [placement, setPlacement] = useState(() =>
     buildPlacement(initialConfig, areaWidth, areaHeight, placementName)
   );
+
+  const placementSignature = useMemo(
+    () => {
+      const p = initialConfig.placement;
+      if (
+        p &&
+        typeof p.left === "number" &&
+        typeof p.top === "number" &&
+        typeof p.width === "number" &&
+        typeof p.height === "number"
+      ) {
+        return `${p.placement ?? ""}:${p.left}:${p.top}:${p.width}:${p.height}`;
+      }
+      return "__none__";
+    },
+    // Nur Placement-Primitive; initialConfig.placement-Objekt würde jeden Render triggern.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      initialConfig.placement?.left,
+      initialConfig.placement?.top,
+      initialConfig.placement?.width,
+      initialConfig.placement?.height,
+      initialConfig.placement?.placement,
+    ]
+  );
+
+  useEffect(() => {
+    // Re-Sync bei Signatur-/Area-/Placement-Wechsel; nicht bei jedem neuen initialConfig-Objekt (verhindert Auto-Save-Loops).
+    startTransition(() => {
+      setPlacement(buildPlacement(initialConfig, areaWidth, areaHeight, placementName));
+    });
+    // initialConfig absichtlich ausgenommen — sonst Placement-Reset nach jedem onSaved.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placementSignature, areaWidth, areaHeight, placementName]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const printAreaRef = useRef<HTMLDivElement | null>(null);
@@ -285,21 +440,89 @@ export function PlacementEditor({
     startX: number;
     startY: number;
     origin: Placement;
+    moved: boolean;
   } | null>(null);
+  const suppressControlToggleRef = useRef(false);
+  const [showPlacementControls, setShowPlacementControls] = useState(true);
 
-  const activeTemplate = useMemo(
+  useEffect(() => {
+    if (!hideNavigation) return;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const base: Record<string, unknown> = {
+          ...(initialConfigRef.current as Record<string, unknown>),
+        };
+        if (onSavedRef.current) {
+          base.mockups = [];
+        }
+        const nextConfig: Record<string, unknown> = {
+          ...base,
+          product_color: effectiveColor,
+          placement,
+        };
+
+        const { error: updateError } = await supabase
+          .from("sessions")
+          .update({
+            config: nextConfig,
+            status: "configuring",
+          })
+          .eq("id", sessionId);
+
+        if (updateError) {
+          setError(updateError.message);
+          return;
+        }
+        setError(null);
+        onSavedRef.current?.(nextConfig);
+      })();
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [placement, effectiveColor, hideNavigation, sessionId]);
+
+  const previewChoice = useMemo(
     () =>
-      chooseTemplate(
-        product.mockup_templates ?? [],
-        product.variants ?? [],
-        color,
-        placementName
-      ),
-    [color, placementName, product.mockup_templates, product.variants]
+      choosePrintfulPreview({
+        images: product.product_images ?? [],
+        templates: product.mockup_templates ?? [],
+        variants: product.variants ?? [],
+        color: effectiveColor,
+        placement: placementName,
+      }),
+    [
+      effectiveColor,
+      placementName,
+      product.mockup_templates,
+      product.product_images,
+      product.variants,
+    ]
   );
-  const mockupImage =
-    getTemplateImage(activeTemplate) ??
-    chooseTemplateImage(product.mockup_templates ?? [], product.variants ?? [], color, placementName);
+  const selectedAsset = useMemo(() => {
+    const selectedSlug = colorSlug(effectiveColor);
+    const matching = (product.color_assets ?? []).filter(
+      (asset) =>
+        asset.image_url &&
+        asset.color_slug === selectedSlug &&
+        placementMatches(asset.placement, placementName)
+    );
+    return matching.find((asset) => asset.is_preferred) ?? matching[0];
+  }, [effectiveColor, placementName, product.color_assets]);
+  const activeTemplate =
+    previewChoice.template && hasTemplatePrintArea(previewChoice.template)
+      ? previewChoice.template
+      : (product.mockup_templates ?? []).find(
+          (template) =>
+            placementMatches(template.placement, placementName) && hasTemplatePrintArea(template)
+        ) ?? previewChoice.template;
+  const productImage = previewChoice.image;
+  const previewImage = selectedAsset?.image_url?.trim() || previewChoice.src;
+  const previewBackgroundColor = editorStageBackgroundColor(productImage);
+  const previewAspectRatio =
+    hasTemplatePrintArea(activeTemplate) && activeTemplate?.template_width && activeTemplate.template_height
+      ? `${activeTemplate.template_width} / ${activeTemplate.template_height}`
+      : undefined;
+  const fallbackShirtColor =
+    resolvedColorOptions.find((option) => option.id === effectiveColor)?.hex ?? effectiveColor;
 
   function updatePlacementFromPointer(clientX: number, clientY: number) {
     const drag = dragRef.current;
@@ -310,6 +533,9 @@ export function PlacementEditor({
 
     const dx = ((clientX - drag.startX) / bounds.width) * areaWidth;
     const dy = ((clientY - drag.startY) / bounds.height) * areaHeight;
+    if (Math.abs(clientX - drag.startX) > 2 || Math.abs(clientY - drag.startY) > 2) {
+      drag.moved = true;
+    }
 
     setPlacement(() => {
       if (drag.mode === "resize") {
@@ -338,21 +564,35 @@ export function PlacementEditor({
       startX: event.clientX,
       startY: event.clientY,
       origin: placement,
+      moved: false,
     };
   }
 
   function endPointerDrag(event: React.PointerEvent) {
     if (dragRef.current?.pointerId === event.pointerId) {
+      suppressControlToggleRef.current = dragRef.current.moved;
       dragRef.current = null;
     }
+  }
+
+  function togglePlacementControls() {
+    if (dragRef.current?.moved || suppressControlToggleRef.current) {
+      suppressControlToggleRef.current = false;
+      return;
+    }
+    setShowPlacementControls((current) => !current);
   }
 
   async function saveAndContinue() {
     setSaving(true);
     setError(null);
-    const nextConfig = {
-      ...initialConfig,
-      product_color: color,
+    const base: Record<string, unknown> = { ...(initialConfig as Record<string, unknown>) };
+    if (hideNavigation && onSaved) {
+      base.mockups = [];
+    }
+    const nextConfig: Record<string, unknown> = {
+      ...base,
+      product_color: effectiveColor,
       placement,
     };
 
@@ -369,7 +609,11 @@ export function PlacementEditor({
       setError(updateError.message);
       return;
     }
-    router.push(`/configure/${sessionId}`);
+    if (onSaved) {
+      onSaved(nextConfig);
+    } else {
+      router.push(`/configure/${sessionId}`);
+    }
   }
 
   const designStyle = {
@@ -384,47 +628,43 @@ export function PlacementEditor({
       {error && <AppNotice tone="error">{error}</AppNotice>}
 
       <AppSurface className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-zinc-100">{product.title}</h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              Ziehe und skaliere dein Design innerhalb der Druckfläche.
-            </p>
+        {!hideColorButtons ? (
+          <div className="flex flex-wrap justify-end gap-2">
+            {resolvedColorOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                title={option.label}
+                aria-label={option.label}
+                onClick={() => {
+                  if (!isColorControlled) setColor(option.id);
+                  onColorChange?.(option.id);
+                }}
+                className={cn(
+                  "h-8 w-8 rounded-full border-2 transition-all",
+                  effectiveColor === option.id
+                    ? "scale-110 border-violet-400 shadow-lg shadow-violet-950/40"
+                    : "border-zinc-600 hover:border-zinc-400"
+                )}
+                style={{ backgroundColor: option.hex }}
+              />
+            ))}
           </div>
-          <div className="flex gap-2">
-            {COLOR_OPTIONS.map((option) => {
-              const optionId = option.toLowerCase();
-              return (
-                <Button
-                  key={option}
-                  type="button"
-                  variant={color === optionId ? "default" : "outline"}
-                  onClick={() => setColor(optionId)}
-                  className={
-                    color === optionId
-                      ? primaryActionClassName("px-4")
-                      : secondaryActionClassName("px-4")
-                  }
-                >
-                  {option}
-                </Button>
-              );
-            })}
-          </div>
-        </div>
+        ) : null}
 
         <div className="mx-auto w-full max-w-md">
-          <div className="relative overflow-hidden rounded-[2rem] border border-zinc-700 bg-zinc-950 shadow-2xl shadow-black/30">
-            {mockupImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={mockupImage}
-                alt={`${product.title} Mockup`}
-                className="block w-full select-none"
-                draggable={false}
-              />
+          <div
+            data-testid="mockup-preview-stage"
+            className="relative overflow-hidden rounded-[2.25rem] border border-zinc-700/80 bg-zinc-950 shadow-2xl shadow-black/40 ring-1 ring-white/5"
+            style={{
+              aspectRatio: previewAspectRatio,
+              backgroundColor: previewBackgroundColor,
+            }}
+          >
+            {previewImage ? (
+              <ProductMockupPreview src={previewImage} title="Shirt-Vorschau" />
             ) : (
-              <FallbackShirtMockup color={color} />
+              <FallbackShirtMockup color={fallbackShirtColor} />
             )}
 
             <div
@@ -432,8 +672,13 @@ export function PlacementEditor({
               data-testid="placement-print-area"
               data-area-width={areaWidth}
               data-area-height={areaHeight}
-              className="absolute border border-dashed border-violet-300/70 bg-violet-500/5"
-              style={printAreaStyle(activeTemplate)}
+              className={cn(
+                "absolute",
+                showPlacementControls
+                  ? "border border-dashed border-violet-300/70 bg-violet-500/5"
+                  : "border border-transparent bg-transparent"
+              )}
+              style={assetPrintAreaStyle(selectedAsset) ?? printAreaStyle(activeTemplate)}
             >
               <div
                 role="button"
@@ -443,7 +688,13 @@ export function PlacementEditor({
                 onPointerMove={(event) => updatePlacementFromPointer(event.clientX, event.clientY)}
                 onPointerUp={endPointerDrag}
                 onPointerCancel={endPointerDrag}
-                className="absolute touch-none rounded-xl border border-white/80 bg-white/10 shadow-lg shadow-black/30"
+                onClick={togglePlacementControls}
+                className={cn(
+                  "absolute touch-none rounded-xl",
+                  showPlacementControls
+                    ? "border border-white/80 bg-white/10 shadow-lg shadow-black/30"
+                    : "border border-transparent bg-transparent"
+                )}
                 style={designStyle}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -453,48 +704,48 @@ export function PlacementEditor({
                   draggable={false}
                   className="h-full w-full select-none object-contain"
                 />
-                <button
-                  type="button"
-                  aria-label="Design skalieren"
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                    startPointerDrag(event, "resize");
-                  }}
-                  onPointerMove={(event) =>
-                    updatePlacementFromPointer(event.clientX, event.clientY)
-                  }
-                  onPointerUp={endPointerDrag}
-                  onPointerCancel={endPointerDrag}
-                  className="absolute -bottom-2 -right-2 h-5 w-5 touch-none rounded-full border border-white bg-violet-500 shadow"
-                />
+                {showPlacementControls && (
+                  <button
+                    type="button"
+                    aria-label="Design skalieren"
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      startPointerDrag(event, "resize");
+                    }}
+                    onPointerMove={(event) =>
+                      updatePlacementFromPointer(event.clientX, event.clientY)
+                    }
+                    onPointerUp={endPointerDrag}
+                    onPointerCancel={endPointerDrag}
+                    className="absolute -bottom-2 -right-2 h-5 w-5 touch-none rounded-full border border-white bg-violet-500 shadow"
+                  />
+                )}
               </div>
             </div>
           </div>
         </div>
-
-        <p className="text-xs text-zinc-500">
-          Druckfläche: {areaWidth} x {areaHeight}px, Placement {placement.placement}
-        </p>
       </AppSurface>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.back()}
-          className={secondaryActionClassName("flex-1")}
-        >
-          Zurück
-        </Button>
-        <Button
-          type="button"
-          onClick={() => void saveAndContinue()}
-          disabled={saving}
-          className={primaryActionClassName("flex-1")}
-        >
-          {saving ? "Speichere..." : "Weiter zur Konfiguration"}
-        </Button>
-      </div>
+      {!hideNavigation ? (
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.back()}
+            className={secondaryActionClassName("flex-1")}
+          >
+            Zurück
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void saveAndContinue()}
+            disabled={saving}
+            className={primaryActionClassName("flex-1")}
+          >
+            {saving ? "Speichere..." : "Weiter zur Konfiguration"}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

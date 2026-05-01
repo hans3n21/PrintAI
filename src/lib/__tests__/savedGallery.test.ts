@@ -5,6 +5,8 @@ import {
   mergeGalleryItems,
   readSavedGallery,
   SAVED_GALLERY_KEY,
+  saveSessionImagesToGallery,
+  writeSavedGallery,
 } from "../savedGallery";
 
 describe("savedGallery", () => {
@@ -100,5 +102,46 @@ describe("savedGallery", () => {
     expect(remaining).toHaveLength(1);
     expect(remaining[0].id).toBe("keep");
     expect(JSON.parse(stored)).toHaveLength(1);
+  });
+
+  it("preserves sessionTitle when saving new gallery items for the same session", () => {
+    let stored = JSON.stringify([]);
+    const storage = {
+      getItem: (key: string) => (key === SAVED_GALLERY_KEY ? stored : null),
+      setItem: (_key: string, value: string) => {
+        stored = value;
+      },
+    };
+
+    saveSessionImagesToGallery(
+      {
+        sessionId: "s1",
+        designUrls: ["https://example.com/a.png"],
+        savedAt: "t1",
+      },
+      storage
+    );
+    const first = JSON.parse(stored) as { sessionTitle?: string }[];
+    expect(first[0]?.sessionTitle).toBeUndefined();
+
+    const withTitle = (JSON.parse(stored) as typeof first).map((item) => ({
+      ...item,
+      sessionTitle: "Mein Motiv",
+    }));
+    writeSavedGallery(withTitle, storage);
+
+    saveSessionImagesToGallery(
+      {
+        sessionId: "s1",
+        designUrls: ["https://example.com/a.png", "https://example.com/b.png"],
+        savedAt: "t2",
+      },
+      storage
+    );
+
+    const merged = JSON.parse(stored);
+    expect(merged.every((i: { sessionTitle?: string }) => i.sessionTitle === "Mein Motiv")).toBe(
+      true
+    );
   });
 });

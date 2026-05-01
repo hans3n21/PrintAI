@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   deleteSavedGalleryItem,
   readSavedGallery,
+  writeSavedGallery,
   type SavedGalleryItem,
 } from "@/lib/savedGallery";
 import { Images, Trash2, X } from "lucide-react";
@@ -14,6 +15,8 @@ export function SavedGalleryButton() {
   const [items, setItems] = useState<SavedGalleryItem[]>([]);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -134,7 +137,50 @@ export function SavedGalleryButton() {
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <figcaption className="line-clamp-2 text-xs text-zinc-400">{item.label}</figcaption>
+                <figcaption
+                  className="line-clamp-2 cursor-pointer text-xs text-zinc-400 transition-colors hover:text-white"
+                  title="Klicken zum Bearbeiten"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingItemId(item.id);
+                    setEditValue(item.sessionTitle ?? item.label);
+                  }}
+                >
+                  {editingItemId === item.id ? (
+                    <input
+                      autoFocus
+                      value={editValue}
+                      maxLength={40}
+                      className="w-full rounded bg-zinc-800 px-1 py-0.5 text-xs text-zinc-100 outline-none ring-1 ring-violet-500"
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={() => {
+                        const gallery = readSavedGallery();
+                        const trimmed = editValue.trim();
+                        const updated = gallery.map((g) =>
+                          g.sessionId === item.sessionId
+                            ? {
+                                ...g,
+                                sessionTitle:
+                                  trimmed ||
+                                  g.sessionTitle ||
+                                  g.label,
+                              }
+                            : g
+                        );
+                        writeSavedGallery(updated);
+                        setItems(updated);
+                        setEditingItemId(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                        if (e.key === "Escape") setEditingItemId(null);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    item.sessionTitle || item.label
+                  )}
+                </figcaption>
               </figure>
               );
             })}
@@ -143,7 +189,10 @@ export function SavedGalleryButton() {
       )}
       {activeIndex !== null && (
         <ImageLightbox
-          items={designItems}
+          items={designItems.map((i) => ({
+            ...i,
+            label: i.sessionTitle || i.label,
+          }))}
           activeIndex={activeIndex}
           onSelect={setActiveIndex}
           onClose={() => setActiveIndex(null)}
