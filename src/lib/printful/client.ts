@@ -44,7 +44,7 @@ async function parseResponseBody(response: Response) {
   }
 }
 
-function buildPrintfulHeaders(mergeHeaders?: Record<string, string>): HeadersInit {
+function buildPrintfulHeaders(mergeHeaders?: Record<string, string>): Record<string, string> {
   const entries: Record<string, string> = {
     Accept: "application/json",
     Authorization: `Bearer ${getApiKey()}`,

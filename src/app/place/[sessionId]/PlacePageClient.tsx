@@ -41,7 +41,7 @@ export function PlacePageClient({ sessionId }: { sessionId: string }) {
 
           if (sessionError) throw new Error(sessionError.message);
           const productSelection = session?.product_selection as ProductSelection | null;
-          const selectedPrintfulProductId = productSelection?.printful_product_id;
+          const selectedPrintfulProductId = Number(productSelection?.printful_product_id);
           let productQuery = supabase
             .from("printful_products")
             .select("id, printful_product_id, title, variants, product_images, print_area, mockup_templates")

@@ -146,42 +146,42 @@ function compareSizes(a: string, b: string) {
 }
 
 function coerceVariants(raw: unknown): ProductVariant[] {
-  return Array.isArray(raw)
-    ? raw
-        .map((entry) => {
-          if (!entry || typeof entry !== "object") return null;
-          const item = entry as Record<string, unknown>;
-          const id = Number(item.variant_id ?? item.catalog_variant_id);
-          if (!Number.isInteger(id) || id <= 0) return null;
-          const sizeRaw = typeof item.size === "string" ? item.size : null;
-          const colorRaw = typeof item.color === "string" ? item.color : null;
-          let price =
-            typeof item.price_cents === "number"
-              ? item.price_cents
-              : item.price != null && item.price !== ""
-                ? Number(item.price)
-                : null;
-          if (typeof price === "number" && !Number.isFinite(price)) price = null;
-          let material =
-            typeof item.material === "string" && item.material.trim().length > 0
-              ? item.material.trim()
-              : null;
-          if (!material) {
-            const name = typeof item.name === "string" ? item.name : "";
-            const lowered = name.toLowerCase();
-            const match = lowered.match(/\b([\wÄÖÜäöüß]+)\s*cotton\b/);
-            if (match?.[1]) material = `${match[1].replace(/^\w/, (ch) => ch.toUpperCase())} Cotton`;
-          }
-          return {
-            variant_id: id,
-            size: sizeRaw?.trim() ? sizeRaw.trim().toUpperCase() : null,
-            color: colorRaw?.trim() ? colorRaw.trim() : null,
-            material,
-            price_cents: typeof price === "number" ? Math.round(price) : null,
-          } satisfies ProductVariant;
-        })
-        .filter((variant): variant is ProductVariant => Boolean(variant))
-    : [];
+  if (!Array.isArray(raw)) return [];
+
+  const variants: ProductVariant[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const item = entry as Record<string, unknown>;
+    const id = Number(item.variant_id ?? item.catalog_variant_id);
+    if (!Number.isInteger(id) || id <= 0) continue;
+    const sizeRaw = typeof item.size === "string" ? item.size : null;
+    const colorRaw = typeof item.color === "string" ? item.color : null;
+    let price =
+      typeof item.price_cents === "number"
+        ? item.price_cents
+        : item.price != null && item.price !== ""
+          ? Number(item.price)
+          : null;
+    if (typeof price === "number" && !Number.isFinite(price)) price = null;
+    let material =
+      typeof item.material === "string" && item.material.trim().length > 0
+        ? item.material.trim()
+        : null;
+    if (!material) {
+      const name = typeof item.name === "string" ? item.name : "";
+      const lowered = name.toLowerCase();
+      const match = lowered.match(/\b([\wÄÖÜäöüß]+)\s*cotton\b/);
+      if (match?.[1]) material = `${match[1].replace(/^\w/, (ch) => ch.toUpperCase())} Cotton`;
+    }
+    variants.push({
+      variant_id: id,
+      size: sizeRaw?.trim() ? sizeRaw.trim().toUpperCase() : null,
+      color: colorRaw?.trim() ? colorRaw.trim() : null,
+      material,
+      price_cents: typeof price === "number" ? Math.round(price) : null,
+    });
+  }
+  return variants;
 }
 
 function uniqueSorted(values: string[]) {

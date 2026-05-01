@@ -188,7 +188,7 @@ async function pollMockupTask(taskKey: string, variantsById: Map<number, Product
 }
 
 async function loadSessionProduct(productSelection?: SessionProductSelection | null) {
-  const selectedPrintfulProductId = productSelection?.printful_product_id;
+  const selectedPrintfulProductId = Number(productSelection?.printful_product_id);
   if (Number.isInteger(selectedPrintfulProductId) && selectedPrintfulProductId > 0) {
     return supabaseAdmin
       .from("printful_products")
@@ -211,8 +211,9 @@ async function loadSessionProduct(productSelection?: SessionProductSelection | n
 async function loadPrintfulProduct(productId: number | undefined, productSelection?: SessionProductSelection | null) {
   const selectedPrintfulProductId =
     productId ??
-    (Number.isInteger(productSelection?.printful_product_id) && productSelection!.printful_product_id! > 0
-      ? productSelection!.printful_product_id
+    (Number.isInteger(Number(productSelection?.printful_product_id)) &&
+    Number(productSelection?.printful_product_id) > 0
+      ? Number(productSelection?.printful_product_id)
       : undefined);
   if (selectedPrintfulProductId) {
     return supabaseAdmin

@@ -18,8 +18,9 @@ export async function removeBackgroundFromPng(input: Buffer): Promise<Buffer | n
   const apiKey = getRemoveBgApiKey();
   if (!apiKey) return null;
 
+  const imageBytes = new Uint8Array(input);
   const formData = new FormData();
-  formData.append("image_file", new Blob([input], { type: "image/png" }), "design.png");
+  formData.append("image_file", new Blob([imageBytes], { type: "image/png" }), "design.png");
   formData.append("format", "png");
   formData.append("size", "auto");
 

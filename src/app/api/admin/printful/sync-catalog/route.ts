@@ -810,22 +810,22 @@ async function fetchMockupTemplates(productId: number): Promise<PrintfulMockupTe
 function filterMockupTemplatesForVariants(
   templates: PrintfulMockupTemplate[],
   variants: NormalizedVariant[]
-) {
+): PrintfulMockupTemplate[] {
   const selectedVariantIds = new Set(variants.map((variant) => variant.variant_id));
   if (selectedVariantIds.size === 0) return [];
 
-  return templates
-    .map((template) => {
-      const ids = Array.isArray(template.catalog_variant_ids)
-        ? (template.catalog_variant_ids as number[]).filter((id) => selectedVariantIds.has(id))
-        : [];
-      if (ids.length === 0) return null;
-      return {
-        ...template,
-        catalog_variant_ids: ids,
-      };
-    })
-    .filter((template): template is PrintfulMockupTemplate => template != null);
+  const filtered: PrintfulMockupTemplate[] = [];
+  for (const template of templates) {
+    const ids = Array.isArray(template.catalog_variant_ids)
+      ? (template.catalog_variant_ids as number[]).filter((id) => selectedVariantIds.has(id))
+      : [];
+    if (ids.length === 0) continue;
+    filtered.push({
+      ...template,
+      catalog_variant_ids: ids,
+    });
+  }
+  return filtered;
 }
 
 async function fetchCatalogProduct(productId: number, sortOrder: number, filter?: VariantFilter) {
