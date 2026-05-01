@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   collectDisplayDesignUrls,
   getDesignPageGenerationState,
+  resolvePrintDesignUrl,
 } from "../designPageGeneration";
 
 describe("getDesignPageGenerationState", () => {
@@ -56,5 +57,33 @@ describe("getDesignPageGenerationState", () => {
 
     expect(state.canShowDesigns).toBe(true);
     expect(state.shouldRequestDesigns).toBe(false);
+  });
+
+  it("does not treat empty legacy design url entries as displayable designs", () => {
+    const state = getDesignPageGenerationState({
+      status: "designing",
+      design_urls: ["", "   "],
+      design_assets: [],
+      slogans: [],
+    });
+
+    expect(state.canShowDesigns).toBe(false);
+    expect(state.shouldRequestDesigns).toBe(true);
+  });
+
+  it("resolves a selected preview URL to the background-removed print URL", () => {
+    expect(
+      resolvePrintDesignUrl(
+        {
+          design_assets: [
+            {
+              preview_url: "https://example.com/preview.png",
+              print_url: "https://example.com/print.png",
+            },
+          ],
+        },
+        "https://example.com/preview.png"
+      )
+    ).toBe("https://example.com/print.png");
   });
 });

@@ -17,21 +17,15 @@ export function buildPromptFromCreativeBrief(
   productSelection?: ProductSelection | null,
   templateRules?: string[]
 ): string {
-  const product = productSelection?.product ?? brief.product;
-  const fabricColor = productSelection?.product_color;
-  const productLabel = product === "tshirt" ? "t-shirt" : product;
-  const mockupInstruction = fabricColor
-    ? `Render a clean mockup preview on a ${fabricColor} ${productLabel}: show the product as the background/foundation and place the artwork naturally on the chest/front print area.`
-    : `Render a clean mockup preview on the selected ${productLabel}: show the product as the background/foundation and place the artwork naturally on the chest/front print area.`;
-  const safeTemplateRules = (templateRules ?? []).filter(
-    (rule) => !/transparent background|isolated motif/i.test(rule)
-  );
+  const safeTemplateRules = (templateRules ?? []);
   const styleGuidance = getStyleGuidance(brief);
   const parts = [
-    `Create a polished ${productLabel} mockup preview for this creative brief: ${brief.theme}.`,
-    mockupInstruction,
+    `Create only the print artwork layer, not a product preview, with a TRANSPARENT background for this creative brief: ${brief.theme}.`,
+    "The motif must be fully isolated — no shirt, no fabric, no product, no background color, no shadow fill. " +
+    "The artwork will be digitally placed onto a garment later. " +
+    "Use clean edges, bold outlines, and high contrast suitable for DTG textile printing.",
     `Source summary: ${brief.source_summary}`,
-    `Occasion: ${brief.occasion}. Style: ${brief.style}. Tone: ${brief.tone}. Product: ${brief.product}.`,
+    `Occasion: ${brief.occasion}. Style: ${brief.style}. Tone: ${brief.tone}.`,
   ];
 
   if (brief.must_include_visuals.length > 0) {
@@ -59,10 +53,8 @@ export function buildPromptFromCreativeBrief(
   if (safeTemplateRules.length) {
     parts.push(`Print template rules:\n- ${safeTemplateRules.join("\n- ")}`);
   }
-  if (productSelection) {
-    parts.push(
-      `Selected product: ${productSelection.product}, fabric color: ${productSelection.product_color}, quantity: ${productSelection.quantity}.`
-    );
+  if (productSelection?.product) {
+    parts.push(`Design is intended for: ${productSelection.product}.`);
   }
   if (brief.reference_images.length > 0) {
     const descriptions = brief.reference_images
@@ -80,9 +72,10 @@ export function buildPromptFromCreativeBrief(
     parts.push(`Avoid: ${brief.avoid.join(", ")}.`);
   }
   parts.push(
+    "Avoid: any shirt silhouette, t-shirt shape, garment mockup, fabric texture, product preview, product background, white fill background, checkerboard transparency pattern.",
     "Safety guide: Keep the scene non-violent and playful; no weapons, blood, injury, gore, fighting, or threatening action.",
     styleGuidance?.technicalSpecs ??
-      "Technical specs: mockup preview, opaque product background, no checkerboard transparency pattern, clean product silhouette, centered composition, flat design, vector-like clean edges, high contrast readable typography. Do not render a checkerboard."
+      "Technical specs: transparent background, isolated motif, centered composition, flat design, vector-like clean edges, high contrast readable typography, print-ready DTG quality."
   );
 
   return parts.join("\n");
@@ -121,18 +114,18 @@ function getStyleGuidance(
   if (/\b(aquarell|watercolor|wasserfarbe)\b/.test(styleText)) {
     return {
       prompt:
-        "Style fidelity: watercolor painting, soft washes, visible paper texture, translucent pigments, organic edges. Avoid style drift: not vector art, not digital illustration.",
+        "Style fidelity: watercolor painting, soft washes, translucent pigments, organic edges. Avoid style drift: not vector art, not digital illustration.",
       technicalSpecs:
-        "Technical specs: mockup preview, opaque product background, no checkerboard transparency pattern, clean product silhouette, centered composition, print-ready contrast, readable typography. Do not render a checkerboard.",
+        "Technical specs: transparent background, isolated motif, centered composition, print-ready contrast, readable typography.",
     };
   }
 
   if (/\b(minimalistisch|minimalist|minimal|minimalistische)\b/.test(styleText)) {
     return {
       prompt:
-        "Style fidelity: minimal composition, few elements, lots of negative space, simple shapes, restrained palette. Avoid style drift: no intricate detail, no busy background, no over-rendered textures.",
+        "Style fidelity: minimal composition, few elements, lots of negative space, simple shapes, restrained palette. Avoid style drift: no intricate detail, no busy background.",
       technicalSpecs:
-        "Technical specs: mockup preview, opaque product background, no checkerboard transparency pattern, clean product silhouette, centered composition, flat design, clean edges, high contrast readable typography. Do not render a checkerboard.",
+        "Technical specs: transparent background, isolated motif, centered composition, flat design, clean edges, high contrast readable typography.",
     };
   }
 

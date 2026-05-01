@@ -1,6 +1,12 @@
 import { getDesignVariantCount } from "@/lib/designVariantCount";
 import { createDesignAsset } from "@/lib/assets/designAssets";
-import { markPostProcessingPending } from "@/lib/assets/postProcessing";
+import { removeBackgroundFromPng } from "@/lib/assets/backgroundRemoval";
+import {
+  markBackgroundRemovalFailed,
+  markBackgroundRemovalSkipped,
+  markBackgroundRemoved,
+  markPostProcessingPending,
+} from "@/lib/assets/postProcessing";
 import { getImageProvider } from "@/lib/imageProviders";
 import { supabaseAdmin } from "@/lib/supabase";
 import type { DesignAsset, ReferenceImageAsset } from "@/lib/types";
@@ -15,6 +21,34 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+async function uploadPng(path: string, buffer: Buffer) {
+  const { error } = await supabaseAdmin.storage
+    .from("designs")
+    .upload(path, buffer, { contentType: "image/png", upsert: true });
+
+  if (error) throw new Error(`Storage upload failed: ${error.message}`);
+
+  const { data } = supabaseAdmin.storage.from("designs").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function attachPrintReadyImage(asset: DesignAsset, originalBuffer: Buffer, printPath: string) {
+  try {
+    const transparentBuffer = await removeBackgroundFromPng(originalBuffer);
+    if (!transparentBuffer) {
+      return markBackgroundRemovalSkipped(asset);
+    }
+
+    const printUrl = await uploadPng(printPath, transparentBuffer);
+    return markBackgroundRemoved(asset, printUrl);
+  } catch (error) {
+    return markBackgroundRemovalFailed(
+      asset,
+      error instanceof Error ? error.message : String(error)
+    );
+  }
 }
 
 export async function generateDesigns(
@@ -37,24 +71,22 @@ export async function generateDesigns(
   const assets = await Promise.all(
     generatedImages.map(async (generated, i) => {
       const buffer = Buffer.from(generated.base64, "base64");
-      const filename = `${sessionId}/design_${i + 1}_${Date.now()}.png`;
+      const timestamp = Date.now();
+      const filename = `${sessionId}/design_${i + 1}_${timestamp}.png`;
+      const printFilename = `${sessionId}/design_${i + 1}_print_${timestamp}.png`;
 
-      const { error } = await supabaseAdmin.storage
-        .from("designs")
-        .upload(filename, buffer, { contentType: "image/png", upsert: true });
-
-      if (error) throw new Error(`Storage upload failed: ${error.message}`);
-
-      const { data } = supabaseAdmin.storage.from("designs").getPublicUrl(filename);
-      return markPostProcessingPending(
+      const previewUrl = await uploadPng(filename, buffer);
+      const asset = markPostProcessingPending(
         createDesignAsset({
-          previewUrl: data.publicUrl,
+          previewUrl,
           provider: generated.provider,
           prompt,
           variantIndex: i,
           seed: generated.seed,
         })
       );
+
+      return attachPrintReadyImage(asset, buffer, printFilename);
     })
   );
 

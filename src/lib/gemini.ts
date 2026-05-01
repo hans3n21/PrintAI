@@ -61,11 +61,9 @@ function getImageProvider(): "openai" | "gemini" {
 }
 
 function supportsOpenAITransparentBackground(modelName: string): boolean {
-  return (
-    modelName === "gpt-image-1" ||
-    modelName === "gpt-image-1.5" ||
-    modelName === "chatgpt-image-latest"
-  );
+  // dall-e-2 and dall-e-3 do NOT support background:transparent.
+  // Keep this allow-list narrow because unsupported models reject the request.
+  return /^gpt-image-1(?:$|[.-])|^chatgpt-image-/.test(modelName);
 }
 
 async function generateDesignImageWithOpenAI(
@@ -87,6 +85,7 @@ async function generateDesignImageWithOpenAI(
     model: modelName,
     prompt: fullPrompt,
     size: size as "1024x1024" | "1536x1024" | "1024x1536" | "auto",
+    output_format: "png",
     ...(transparentBackgroundRequested
       ? { background: "transparent" as const }
       : {}),
@@ -125,15 +124,20 @@ async function generateDesignImageWithOpenAIReferences(
   const fullPrompt =
     prompt +
     STYLE_VARIANTS[variantIndex] +
-    "\nUse the attached reference image(s) as visual guidance while creating a clean printable design.";
+    "\nUse the attached reference image(s) only as motif/style guidance. Create a clean isolated printable artwork layer, not a shirt mockup, not a product preview, and do not preserve any garment background from the reference.";
   const size = process.env.OPENAI_IMAGE_SIZE?.trim() || "1024x1024";
   const images = await Promise.all(referenceImages.map(fetchReferenceImageFile));
+  const transparentBackgroundRequested =
+    supportsOpenAITransparentBackground(modelName);
   const response = await openai.images.edit({
     model: modelName,
     image: images,
     prompt: fullPrompt,
     size: size as "256x256" | "512x512" | "1024x1024" | "1536x1024" | "1024x1536" | "auto",
     output_format: "png",
+    ...(transparentBackgroundRequested
+      ? { background: "transparent" as const }
+      : {}),
   });
 
   const b64 = response.data?.[0]?.b64_json;
@@ -180,7 +184,7 @@ export async function generateDesignImage(
     process.env.GEMINI_IMAGE_MODEL?.trim() || "gemini-2.5-flash-image";
   const referenceInstruction =
     referenceImages.length > 0
-      ? "\nUse the attached reference image(s) as guidance for likeness, pose, objects, colors, or mood, but convert the result into a clean isolated print design."
+      ? "\nUse the attached reference image(s) only as guidance for likeness, pose, objects, colors, or mood. Convert the result into a clean isolated print artwork layer. Do not include a shirt, garment, product mockup, fabric background, or any product layout from the reference."
       : "";
   const fullPrompt = prompt + STYLE_VARIANTS[variantIndex] + referenceInstruction;
 

@@ -10,6 +10,10 @@ vi.mock("@/components/notes/NotesFeed", () => ({
   NotesFeed: () => <div>Feedback Mock</div>,
 }));
 
+vi.mock("../AdminProducts", () => ({
+  AdminProducts: () => <div>Produkte Mock</div>,
+}));
+
 describe("AdminDashboard", () => {
   it("shows a link back to the start page", () => {
     render(<AdminDashboard />);
@@ -30,5 +34,15 @@ describe("AdminDashboard", () => {
 
     expect(screen.getByText("Feedback Mock")).toBeInTheDocument();
     expect(screen.queryByText("Session Übersicht Mock")).not.toBeInTheDocument();
+  });
+
+  it("can switch to products", () => {
+    render(<AdminDashboard />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Produkte" }));
+
+    expect(screen.getByText("Produkte Mock")).toBeInTheDocument();
+    expect(screen.queryByText("Session Übersicht Mock")).not.toBeInTheDocument();
+    expect(screen.queryByText("Feedback Mock")).not.toBeInTheDocument();
   });
 });

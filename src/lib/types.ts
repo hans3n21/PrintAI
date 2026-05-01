@@ -22,6 +22,7 @@ export type SessionStatus =
   | "onboarding"
   | "generating"
   | "designing"
+  | "placing"
   | "configuring"
   | "checkout"
   | "ordered";
@@ -56,6 +57,9 @@ export interface ProductSelection {
   product: Product;
   product_color: ProductColor;
   quantity: number;
+  printful_variant_id?: number;
+  size?: string;
+  color?: string;
 }
 
 export interface ReferenceImageAsset {
@@ -159,7 +163,7 @@ export interface SlogansApiResponse {
 }
 
 export interface OrderApiResponse {
-  success: boolean;
   order_id: string;
-  message: string;
+  status: string;
+  dashboard_url: string;
 }

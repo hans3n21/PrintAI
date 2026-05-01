@@ -12,14 +12,15 @@ const COLORS = [
 interface ColorPickerProps {
   selected: string;
   onChange: (color: string) => void;
+  colors?: Array<{ id: string; label: string; hex: string }>;
 }
 
-export function ColorPicker({ selected, onChange }: ColorPickerProps) {
+export function ColorPicker({ selected, onChange, colors = COLORS }: ColorPickerProps) {
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-zinc-400">Produktfarbe</p>
       <div className="flex gap-3">
-        {COLORS.map((c) => (
+        {colors.map((c) => (
           <button
             key={c.id}
             title={c.label}

@@ -31,7 +31,6 @@ describe("DesignGrid", () => {
       <DesignGrid
         urls={["https://example.com/design.png"]}
         selectedUrl="https://example.com/design.png"
-        onSelect={vi.fn()}
         productColor="grey"
       />
     );
@@ -44,8 +43,7 @@ describe("DesignGrid", () => {
     expect(screen.getByAltText("Design 1")).toHaveClass("object-cover");
   });
 
-  it("selects a design and zooms it in place on click", () => {
-    const onSelect = vi.fn();
+  it("zooms a design in place on click without changing the selection", () => {
     render(
       <DesignGrid
         urls={[
@@ -53,14 +51,12 @@ describe("DesignGrid", () => {
           "https://example.com/design-2.png",
         ]}
         selectedUrl={null}
-        onSelect={onSelect}
       />
     );
 
     const designButton = screen.getByRole("button", { name: "Design 2 vergrößern" });
     fireEvent.click(designButton);
 
-    expect(onSelect).toHaveBeenCalledWith("https://example.com/design-2.png");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(designButton).toHaveAttribute("aria-pressed", "true");
     expect(designButton).toHaveClass("cursor-grab");
@@ -81,7 +77,6 @@ describe("DesignGrid", () => {
       <DesignGrid
         urls={["https://example.com/design.png"]}
         selectedUrl={null}
-        onSelect={vi.fn()}
       />
     );
 
@@ -101,7 +96,6 @@ describe("DesignGrid", () => {
       <DesignGrid
         urls={["https://example.com/design.png"]}
         selectedUrl={null}
-        onSelect={vi.fn()}
       />
     );
 
@@ -131,7 +125,6 @@ describe("DesignGrid", () => {
       <DesignGrid
         urls={["https://example.com/design.png"]}
         selectedUrl={null}
-        onSelect={vi.fn()}
       />
     );
 

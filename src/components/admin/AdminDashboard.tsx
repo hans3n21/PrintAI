@@ -6,9 +6,10 @@ import { secondaryActionClassName } from "@/components/ui/appSurface";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useState } from "react";
+import { AdminProducts } from "./AdminProducts";
 import { AdminSessionOverview } from "./AdminSessionOverview";
 
-type AdminTab = "sessions" | "feedback";
+type AdminTab = "sessions" | "feedback" | "products";
 
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<AdminTab>("sessions");
@@ -41,13 +42,27 @@ export function AdminDashboard() {
           >
             Feedback
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setActiveTab("products")}
+            className={cn(
+              secondaryActionClassName(),
+              activeTab === "products" &&
+                "border-violet-500/70 bg-violet-600/20 text-violet-100"
+            )}
+          >
+            Produkte
+          </Button>
         </div>
         <Link href="/" className={secondaryActionClassName()}>
           Zur Startseite
         </Link>
       </div>
 
-      {activeTab === "sessions" ? <AdminSessionOverview /> : <NotesFeed />}
+      {activeTab === "sessions" && <AdminSessionOverview />}
+      {activeTab === "feedback" && <NotesFeed />}
+      {activeTab === "products" && <AdminProducts />}
     </div>
   );
 }

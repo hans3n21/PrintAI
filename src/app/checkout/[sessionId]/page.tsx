@@ -3,7 +3,6 @@
 import { ImageGallery } from "@/components/checkout/ImageGallery";
 import { Header } from "@/components/layout/Header";
 import { FeedbackWidget } from "@/components/notes/FeedbackWidget";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   AppNotice,
@@ -16,19 +15,23 @@ import {
 import { saveSessionImagesToGallery } from "@/lib/savedGallery";
 import { supabase } from "@/lib/supabase";
 import type { ReferenceImageAsset } from "@/lib/types";
-import { CheckCircle, Images, Package } from "lucide-react";
+import { Images } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { use, useEffect, useState } from "react";
 
 export default function CheckoutPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
-  const [ordered, setOrdered] = useState(false);
-  const [orderId, setOrderId] = useState("");
+  const searchParams = useSearchParams();
+  const stripeStatus = searchParams.get("stripe");
   const [loading, setLoading] = useState(false);
   const [designUrl, setDesignUrl] = useState<string | null>(null);
   const [designUrls, setDesignUrls] = useState<string[]>([]);
   const [referenceImages, setReferenceImages] = useState<ReferenceImageAsset[]>([]);
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [gallerySaved, setGallerySaved] = useState(false);
+  const [printFileUrl, setPrintFileUrl] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [mockupCount, setMockupCount] = useState(0);
 
   useEffect(() => {
     void supabase
@@ -41,21 +44,68 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
         setDesignUrl(data.selected_design_url);
         setDesignUrls((data.design_urls ?? []) as string[]);
         setReferenceImages((data.reference_images ?? []) as ReferenceImageAsset[]);
-        setConfig((data.config ?? {}) as Record<string, unknown>);
+        const nextConfig = (data.config ?? {}) as Record<string, unknown>;
+        setConfig(nextConfig);
+        setMockupCount(Array.isArray(nextConfig.mockups) ? nextConfig.mockups.length : 0);
       });
   }, [sessionId]);
 
   const handleOrder = async () => {
     setLoading(true);
-    const res = await fetch("/api/order", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId }),
-    });
-    const data = await res.json();
-    setOrderId(data.order_id);
-    setOrdered(true);
-    setLoading(false);
+    setOrderError(null);
+    try {
+      const printFileRes = await fetch("/api/print-file/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      const printFileData = (await printFileRes.json()) as {
+        url?: string;
+        storage_path?: string;
+        error?: string;
+      };
+      if (!printFileRes.ok) {
+        throw new Error(printFileData.error ?? "Print-Datei konnte nicht erstellt werden");
+      }
+      setPrintFileUrl(printFileData.url ?? null);
+
+      const existingMockups = Array.isArray(config.mockups)
+        ? (config.mockups as Array<{ variant_id: number; mockup_url: string }>)
+        : [];
+      if (existingMockups.length > 0) {
+        setMockupCount(existingMockups.length);
+      } else {
+        const mockupRes = await fetch("/api/printful/mockup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        });
+        const mockupData = (await mockupRes.json()) as {
+          mockups?: Array<{ variant_id: number; mockup_url: string }>;
+          error?: string;
+        };
+        if (!mockupRes.ok) {
+          throw new Error(mockupData.error ?? "Printful-Mockups konnten nicht erstellt werden");
+        }
+        setMockupCount(mockupData.mockups?.length ?? 0);
+      }
+
+      const res = await fetch("/api/checkout/stripe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(data.error ?? "Stripe Checkout konnte nicht gestartet werden");
+      }
+      if (!data.url) throw new Error("Stripe Checkout URL fehlt");
+      window.location.href = data.url;
+    } catch (error) {
+      setOrderError(error instanceof Error ? error.message : "Bestellung fehlgeschlagen");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveGallery = () => {
@@ -67,52 +117,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
     });
     setGallerySaved(true);
   };
-
-  if (ordered) {
-    return (
-      <div className="flex min-h-screen flex-col">
-        <Header
-          rightSlot={
-            <FeedbackWidget
-              triggerVariant="header"
-              sessionId={sessionId}
-              targetType="page"
-              targetRef={`checkout-complete:${sessionId}`}
-              designUrlsSnapshot={designUrls}
-              clientState={{ ordered, orderId }}
-            />
-          }
-        />
-        <main className="flex flex-1 flex-col items-center justify-center p-4 text-center">
-          <AppSurface className="flex w-full max-w-xl flex-col items-center gap-6">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full border border-green-500/30 bg-green-500/15 shadow-lg shadow-green-950/20">
-            <CheckCircle className="h-10 w-10 text-green-400" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white">Bestellung eingegangen!</h2>
-            <p className="mt-2 text-zinc-400">Demo-Modus - keine echte Zahlung erfolgt</p>
-            <Badge variant="outline" className="mt-3 rounded-full border-zinc-700/80 bg-zinc-900/70 text-zinc-400">
-              Bestell-Nr: {orderId}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-2 rounded-2xl border border-zinc-700/70 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-400">
-            <Package className="h-4 w-4" />
-            Printify würde jetzt produzieren und direkt versenden.
-          </div>
-          <Button
-            onClick={() => {
-              window.location.href = "/";
-            }}
-            variant="outline"
-            className={secondaryActionClassName()}
-          >
-            Neues Design erstellen
-          </Button>
-          </AppSurface>
-        </main>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -129,6 +133,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
               config,
               gallerySaved,
               loading,
+              printFileUrl,
+              mockupCount,
             }}
           />
         }
@@ -168,18 +174,50 @@ export default function CheckoutPage({ params }: { params: Promise<{ sessionId: 
             <span>Menge</span>
             <span className="text-zinc-200">{String(config.quantity ?? 1)} Stück</span>
           </div>
+          {printFileUrl && (
+            <div className="flex justify-between text-zinc-400">
+              <span>Print-Datei</span>
+              <a
+                href={printFileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-violet-300 hover:text-violet-200"
+              >
+                öffnen
+              </a>
+            </div>
+          )}
+          {mockupCount > 0 && (
+            <div className="flex justify-between text-zinc-400">
+              <span>Printful-Mockups</span>
+              <span className="text-zinc-200">{mockupCount} erstellt</span>
+            </div>
+          )}
         </AppSurface>
 
-        <AppNotice tone="warning">
-          Demo-Modus: Keine echte Zahlung. Stripe & Printify sind noch nicht angebunden.
+        {stripeStatus === "success" && (
+          <AppNotice tone="success">
+            Zahlung wurde an Stripe übergeben. Sobald der Webhook bestätigt ist, wird der
+            Printful-Draft erstellt.
+          </AppNotice>
+        )}
+        {stripeStatus === "cancel" && (
+          <AppNotice tone="warning">
+            Zahlung abgebrochen. Du kannst den Checkout jederzeit erneut starten.
+          </AppNotice>
+        )}
+        <AppNotice tone="neutral">
+          Sichere Zahlung per Stripe Checkout. Die Printful-Bestellung wird erst nach bestätigter
+          Zahlung vorbereitet.
         </AppNotice>
+        {orderError && <AppNotice tone="error">{orderError}</AppNotice>}
 
         <Button
           onClick={() => void handleOrder()}
           disabled={loading}
           className={primaryActionClassName("w-full py-6 text-base font-semibold")}
         >
-          {loading ? "Bestellung wird aufgegeben..." : "Jetzt bestellen (Demo)"}
+          {loading ? "Checkout wird vorbereitet..." : "Jetzt sicher bezahlen"}
         </Button>
         <Button
           type="button"

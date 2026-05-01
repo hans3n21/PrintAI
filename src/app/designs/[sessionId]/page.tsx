@@ -16,11 +16,12 @@ import {
 import {
   collectDisplayDesignUrls,
   getDesignPageGenerationState,
+  resolvePrintDesignUrl,
 } from "@/lib/designPageGeneration";
 import { getDesignVariantCount } from "@/lib/designVariantCount";
 import { saveSessionImagesToGallery } from "@/lib/savedGallery";
 import { supabase } from "@/lib/supabase";
-import type { ChatMessage, ReferenceImageAsset, SloganOption } from "@/lib/types";
+import type { ChatMessage, DesignAsset, ReferenceImageAsset, SloganOption } from "@/lib/types";
 import { ArrowRight, Images, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
@@ -31,6 +32,7 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
   const designCount = getDesignVariantCount();
 
   const [designs, setDesigns] = useState<string[]>([]);
+  const [designAssets, setDesignAssets] = useState<DesignAsset[]>([]);
   const [slogans, setSlogans] = useState<SloganOption[]>([]);
   const [conversation, setConversation] = useState<ChatMessage[]>([]);
   const [referenceImages, setReferenceImages] = useState<ReferenceImageAsset[]>([]);
@@ -105,6 +107,10 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
       if (generationState.canShowDesigns) {
         const displayDesigns = collectDisplayDesignUrls(data);
         setDesigns(displayDesigns);
+        setDesignAssets((data.design_assets ?? []) as DesignAsset[]);
+        setSelectedDesign((current) =>
+          current && displayDesigns.includes(current) ? current : displayDesigns[0] ?? null
+        );
         setSlogans((data.slogans ?? []) as SloganOption[]);
         setConversation((data.conversation_history ?? []) as ChatMessage[]);
         setReferenceImages((data.reference_images ?? []) as ReferenceImageAsset[]);
@@ -127,6 +133,7 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
     setGenerationError(null);
     setGallerySaved(false);
     setDesigns([]);
+    setDesignAssets([]);
     setSelectedDesign(null);
     requestedDesignsRef.current = true;
     setLoading(true);
@@ -147,13 +154,14 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
     await supabase
       .from("sessions")
       .update({
-        selected_design_url: selectedDesign,
+        selected_design_url:
+          resolvePrintDesignUrl({ design_assets: designAssets }, selectedDesign) ?? selectedDesign,
         selected_slogan: selectedSlogan !== null ? slogans[selectedSlogan] : null,
-        status: "configuring",
+        status: "placing",
       })
       .eq("id", sessionId);
 
-    router.push(`/configure/${sessionId}`);
+    router.push(`/place/${sessionId}`);
   };
 
   const handleSaveGallery = () => {
@@ -227,7 +235,6 @@ export default function DesignsPage({ params }: { params: Promise<{ sessionId: s
           <DesignGrid
             urls={designs}
             selectedUrl={selectedDesign}
-            onSelect={setSelectedDesign}
             skeletonCount={designCount}
           />
         )}

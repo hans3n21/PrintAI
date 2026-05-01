@@ -1,38 +1,23 @@
-import { supabaseAdmin } from "@/lib/supabase";
-import type { OrderApiResponse } from "@/lib/types";
+import { createPrintfulDraftOrderForSession } from "@/lib/orders/printfulFulfillment";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
-  const { sessionId } = await request.json();
+  try {
+    const { sessionId } = (await request.json()) as { sessionId?: unknown };
 
-  if (!sessionId) {
-    return NextResponse.json({ error: "sessionId required" }, { status: 400 });
+    if (typeof sessionId !== "string" || !sessionId.trim()) {
+      return NextResponse.json({ error: "sessionId required" }, { status: 400 });
+    }
+
+    const result = await createPrintfulDraftOrderForSession(sessionId.trim());
+    return NextResponse.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const status =
+      message === "printful_variant_id and print_file.url required" ||
+      message === "sessionId required"
+        ? 400
+        : 500;
+    return NextResponse.json({ error: message }, { status });
   }
-
-  const { data: session } = await supabaseAdmin
-    .from("sessions")
-    .select("config, selected_design_url, design_assets, product_selection, onboarding_data")
-    .eq("id", sessionId)
-    .single();
-
-  const stubOrderId = `stub-${Date.now()}`;
-
-  await supabaseAdmin.from("orders").insert({
-    session_id: sessionId,
-    status: "stub",
-    total_cents: 2500,
-    line_items: session,
-  });
-
-  await supabaseAdmin
-    .from("sessions")
-    .update({ status: "ordered", updated_at: new Date().toISOString() })
-    .eq("id", sessionId);
-
-  const response: OrderApiResponse = {
-    success: true,
-    order_id: stubOrderId,
-    message: "Bestellung erfolgreich! (Demo-Modus - keine echte Zahlung)",
-  };
-  return NextResponse.json(response);
 }

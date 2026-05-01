@@ -147,6 +147,7 @@ const statusLabels: Record<SessionStatus, string> = {
   onboarding: "Onboarding",
   generating: "Generiert",
   designing: "Design bereit",
+  placing: "Platzierung",
   configuring: "Konfiguration",
   checkout: "Checkout",
   ordered: "Bestellt",
@@ -243,9 +244,12 @@ function MediaLightbox({
   const [previewPanOffset, setPreviewPanOffset] = useState({ x: 0, y: 0 });
   const active = items[index];
   useEffect(() => {
-    setPreviewZoomScale(1);
-    setPreviewPanOffset({ x: 0, y: 0 });
-    previewDragRef.current = null;
+    const timer = window.setTimeout(() => {
+      setPreviewZoomScale(1);
+      setPreviewPanOffset({ x: 0, y: 0 });
+      previewDragRef.current = null;
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [active?.url]);
 
   if (!active) return null;

@@ -6,9 +6,11 @@ import {
 } from "@/lib/openai";
 import type {
   ChatMessage,
+  EventType,
   OnboardingData,
   ProductSelection,
   ReferenceImageAsset,
+  Style,
 } from "@/lib/types";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
@@ -127,6 +129,64 @@ function extractSummary(raw: string, data: OnboardingData): string {
   const motif = data.insider ?? data.text_custom ?? "deinem Motiv";
   const product = data.product === "tshirt" ? "T-Shirt" : data.product;
   return `Alles klar! Ich erstelle ein ${data.tonality}es ${data.style}-${product} mit ${motif}.`;
+}
+
+function asksForOccasion(reply: string) {
+  return /\b(anlass|wof[uü]r|f[uü]r welchen zweck)\b/i.test(reply);
+}
+
+function hasExplicitOccasionSignal(text: string): boolean {
+  return /\b(geburtstag|birthday|jga|junggesellen|junggesellinnen|abi|abitur|verein|club|team|firma|business|hochzeit|wedding|party|feier|weihnachten|ostern|halloween)\b/i.test(
+    text
+  );
+}
+
+function inferStyle(text: string): Style {
+  if (/\b(anime|manga)\b/i.test(text)) return "anime";
+  if (/\b(vintage|retro)\b/i.test(text)) return "vintage";
+  if (/\b(minimalistisch|minimalist|minimal)\b/i.test(text)) return "minimalistisch";
+  if (/\b(realistisch|realistic|foto|photo)\b/i.test(text)) return "realistisch";
+  if (/\b(pop.art|popart)\b/i.test(text)) return "pop_art";
+  if (/\b(comic|cartoon|disney|pixar|zeichentrick)\b/i.test(text)) return "cartoon";
+  if (/\b(modern|clean)\b/i.test(text)) return "modern";
+  return "sonstiges";
+}
+
+function inferProduct(text: string, productSelection?: ProductSelection | null) {
+  if (productSelection?.product) return productSelection.product;
+  if (/\bhoodie|kapuzenpulli\b/i.test(text)) return "hoodie";
+  if (/\btasse|mug\b/i.test(text)) return "tasse";
+  if (/\bposter\b/i.test(text)) return "poster";
+  return "tshirt";
+}
+
+function shouldDefaultOccasion(reply: string, userMessage: string) {
+  return asksForOccasion(reply) && !hasExplicitOccasionSignal(userMessage);
+}
+
+function completeNeutralOccasionRequest(
+  userMessage: string,
+  productSelection?: ProductSelection | null
+): OnboardingComplete {
+  const cleanMessage = userMessage.trim();
+  const product = inferProduct(cleanMessage, productSelection);
+  const style = inferStyle(cleanMessage);
+  const data: OnboardingData = {
+    event_type: "sonstiges" satisfies EventType,
+    group: false,
+    group_size: productSelection?.quantity ?? 1,
+    names: null,
+    date: null,
+    style,
+    product,
+    text_custom: null,
+    photo_upload: false,
+    insider: cleanMessage || null,
+    tonality: "witzig",
+  };
+  const productLabel = product === "tshirt" ? "T-Shirt" : product;
+  const summary = `Alles klar! Ich erstelle ein ${style}-${productLabel} mit ${cleanMessage || "deinem Motiv"}.`;
+  return { complete: true, data, summary };
 }
 
 export async function runForceCompleteOnboarding(
@@ -251,6 +311,10 @@ export async function runOnboardingMessage(
   const complete = tryParseCompletePayload(raw);
   if (complete) {
     return { complete: true, data: complete.data, summary: complete.summary };
+  }
+
+  if (shouldDefaultOccasion(reply, userMessage)) {
+    return completeNeutralOccasionRequest(userMessage, options?.productSelection);
   }
 
   return { complete: false, reply };

@@ -134,6 +134,32 @@ describe("runOnboardingMessage globhanes", () => {
     expect(content).toContain('FALSCH: "Für welchen Anlass ist das Shirt?"');
   });
 
+  it("overrides redundant occasion questions for motif and style-only requests", async () => {
+    vi.mocked(openai.chat.completions.create).mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: "Für welchen Anlass möchtest du das Shirt mit der Comicfigur im Disney-Stil?",
+          },
+        },
+      ],
+    } as never);
+
+    const result = await runOnboardingMessage(
+      [],
+      "Ein schwarzes Shirt mit einer Comicfigur im Disney-Stil",
+      { productSelection }
+    );
+
+    expect(result.complete).toBe(true);
+    if (result.complete) {
+      expect(result.data.event_type).toBe("sonstiges");
+      expect(result.data.product).toBe("tshirt");
+      expect(result.data.style).toBe("cartoon");
+      expect(result.summary).toContain("Comicfigur im Disney-Stil");
+    }
+  });
+
   it("treats prose-wrapped onboarding data as complete instead of leaking it to chat", async () => {
     vi.mocked(openai.chat.completions.create).mockResolvedValueOnce({
       choices: [

@@ -33,7 +33,7 @@ describe("buildPromptFromCreativeBrief", () => {
     expect(prompt).toContain("Hansi der King");
   });
 
-  it("asks for a clean product mockup preview instead of a fake transparent background", () => {
+  it("asks for an isolated artwork layer instead of a product mockup preview", () => {
     const brief: CreativeBrief = {
       occasion: "sonstiges",
       product: "tshirt",
@@ -56,10 +56,11 @@ describe("buildPromptFromCreativeBrief", () => {
       "transparent background or isolated motif",
     ]);
 
-    expect(prompt).toContain("mockup preview");
-    expect(prompt).toContain("grey t-shirt");
-    expect(prompt).toContain("Do not render a checkerboard");
-    expect(prompt).not.toContain("transparent background");
+    expect(prompt).toContain("artwork layer");
+    expect(prompt).toContain("not a product preview");
+    expect(prompt).toContain("TRANSPARENT background");
+    expect(prompt).toContain("no shirt");
+    expect(prompt).not.toContain("grey t-shirt");
   });
 
   it("includes uploaded reference image descriptions in the final prompt", () => {

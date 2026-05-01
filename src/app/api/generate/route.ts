@@ -17,32 +17,23 @@ function buildFinalImagePrompt(promptData: {
   negative_prompt?: string | null;
   style_suffix?: string | null;
   text_note?: string | null;
-}, textCustom?: string | null, templateRules?: string[], productSelection?: ProductSelection | null): string {
-  const product = productSelection?.product ?? "tshirt";
-  const productLabel = product === "tshirt" ? "t-shirt" : product;
-  const fabricColor = productSelection?.product_color;
-  const safeTemplateRules = (templateRules ?? []).filter(
-    (rule) => !/transparent background|isolated motif/i.test(rule)
-  );
+}, textCustom?: string | null, templateRules?: string[]): string {
   const parts: string[] = [];
   parts.push(
-    fabricColor
-      ? `Render this as a clean mockup preview on a ${fabricColor} ${productLabel}; use the product as the background/foundation and place the artwork naturally on the chest/front print area. Do not render a checkerboard transparency pattern.`
-      : `Render this as a clean mockup preview on the selected ${productLabel}; use the product as the background/foundation and place the artwork naturally on the chest/front print area. Do not render a checkerboard transparency pattern.`
+    "Create only the print artwork layer, not a product preview, with a TRANSPARENT background. " +
+    "The motif must be fully isolated — no shirt, no fabric, no product, no background color, no shadow fill. " +
+    "The artwork will be digitally placed onto a garment later. " +
+    "Use clean edges, bold outlines, and high contrast suitable for DTG textile printing."
   );
   if (promptData.prompt?.trim()) parts.push(promptData.prompt.trim());
+  const safeTemplateRules = (templateRules ?? []);
   if (safeTemplateRules.length) {
-    parts.push(`Print template rules:\n- ${safeTemplateRules.join("\n- ")}`);
-  }
-  if (productSelection) {
-    parts.push(
-      `Selected product: ${productSelection.product}, fabric color: ${productSelection.product_color}, quantity: ${productSelection.quantity}.`
-    );
+    parts.push(`Print design rules:\n- ${safeTemplateRules.join("\n- ")}`);
   }
   if (promptData.style_suffix?.trim()) parts.push(`Style: ${promptData.style_suffix.trim()}`);
   if (textCustom?.trim()) {
     parts.push(
-      `IMPORTANT: Include exactly this readable text in the design: "${textCustom.trim()}". Place it at the top, bold, highly legible.`
+      `IMPORTANT: Include exactly this readable text in the design: "${textCustom.trim()}". Bold, highly legible.`
     );
   } else if (promptData.text_note?.trim()) {
     parts.push(`Text requirement: ${promptData.text_note.trim()}`);
@@ -51,6 +42,7 @@ function buildFinalImagePrompt(promptData: {
     parts.push(`Avoid: ${promptData.negative_prompt.trim()}`);
   }
   parts.push(
+    "Avoid: any shirt silhouette, t-shirt shape, garment mockup, fabric texture, product preview, product background, checkerboard transparency pattern, white fill background.",
     "Safety guide: Keep the scene non-violent and playful; no weapons, blood, injury, gore, fighting, or threatening action."
   );
   return parts.join("\n");
@@ -103,8 +95,7 @@ export async function POST(request: Request) {
       : buildFinalImagePrompt(
           session.prompt_data,
           textCustom,
-          template?.rules,
-          productSelection
+          template?.rules
         );
     const { urls, assets } = await generateDesigns(
       sessionId,

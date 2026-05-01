@@ -18,6 +18,12 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Environment
+
+Copy `.env.example` to `.env.local` and fill in the required values. For
+Printful, set `PRINTFUL_API_KEY` to the API token from Printful under
+`Settings -> Stores -> API`.
+
 ## Future Image Editing Ideas
 
 - Add a mask-based image editor so users can select parts of an uploaded photo

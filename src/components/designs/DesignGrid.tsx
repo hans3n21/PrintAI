@@ -7,7 +7,6 @@ import { useRef, useState } from "react";
 interface DesignGridProps {
   urls: string[];
   selectedUrl: string | null;
-  onSelect: (url: string) => void;
   loading?: boolean;
   productColor?: string;
   /** Platzhalter-Slots im Ladezustand (z. B. aus getDesignVariantCount()). */
@@ -40,7 +39,6 @@ function clampPanOffset(
 export function DesignGrid({
   urls,
   selectedUrl,
-  onSelect,
   loading,
   skeletonCount = 4,
 }: DesignGridProps) {
@@ -59,7 +57,6 @@ export function DesignGrid({
     n <= 1 ? "grid-cols-1" : "grid-cols-2";
 
   const toggleZoom = (url: string) => {
-    onSelect(url);
     const drag = dragRef.current;
     dragRef.current = null;
     if (drag?.url === url && drag.moved) return;

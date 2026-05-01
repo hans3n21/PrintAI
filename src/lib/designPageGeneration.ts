@@ -39,9 +39,29 @@ export function collectDisplayDesignUrls(data: DesignPageGenerationInput): strin
   return out;
 }
 
+export function resolvePrintDesignUrl(
+  data: Pick<DesignPageGenerationInput, "design_assets">,
+  selectedUrl: string | null
+): string | null {
+  if (!selectedUrl) return null;
+  for (const asset of data.design_assets ?? []) {
+    if (!asset || typeof asset !== "object") continue;
+    const designAsset = asset as DesignAssetLike;
+    if (
+      designAsset.preview_url === selectedUrl ||
+      designAsset.mockup_url === selectedUrl ||
+      designAsset.print_url === selectedUrl
+    ) {
+      return typeof designAsset.print_url === "string" && designAsset.print_url.trim()
+        ? designAsset.print_url.trim()
+        : selectedUrl;
+    }
+  }
+  return selectedUrl;
+}
+
 export function getDesignPageGenerationState(data: DesignPageGenerationInput) {
-  const hasDesigns =
-    hasItems(data.design_urls) || collectDisplayDesignUrls(data).length > 0;
+  const hasDesigns = collectDisplayDesignUrls(data).length > 0;
   const hasSlogans = hasItems(data.slogans);
   const canGenerate = data.status === "generating" || data.status === "designing";
 

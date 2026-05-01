@@ -110,4 +110,37 @@ describe("generateDesignImage", () => {
     );
     expect(generateMock).not.toHaveBeenCalled();
   });
+
+  it("requests transparent background for OpenAI reference image edits when supported", async () => {
+    process.env.IMAGE_PROVIDER = "openai";
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.OPENAI_IMAGE_MODEL = "gpt-image-1";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => Buffer.from("ref").buffer,
+      })
+    );
+    editMock.mockResolvedValueOnce({
+      data: [{ b64_json: Buffer.from("edited").toString("base64") }],
+    });
+
+    await generateDesignImage("isolated print artwork", 0, [
+      {
+        url: "https://example.com/ref.png",
+        storage_path: "session/ref.png",
+        mime: "image/png",
+        uploaded_at: "2026-04-27T00:00:00.000Z",
+        description: null,
+      },
+    ]);
+
+    expect(editMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gpt-image-1",
+        background: "transparent",
+      })
+    );
+  });
 });
